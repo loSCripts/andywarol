@@ -1,0 +1,796 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tableau Blanc - Mesure Automatique</title>
+    <style>
+        /* --- Thème avec Dégradé Bleu-Violet --- */
+        :root {
+            --couleur-tableau: #2d2d2d; /* Gris foncé pour le tableau */
+            --bordure-tableau: #444444; /* Bordure plus claire */
+            --couleur-metre: #f9ca24; /* Jaune vif pour le contraste */
+            --texte-principal: #e0e0e0; /* Texte clair */
+            --ombre: rgba(0, 0, 0, 0.5);
+            --duree-animation: 2.5s; /* Durée de l'animation de mesure */
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html, body {
+            height: 100%;
+            width: 100%;
+            margin: 0;
+            font-family: Arial, sans-serif;
+            /* Nouveau fond avec dégradé bleu-violet */
+            background: linear-gradient(135deg, #0a1628 0%, #1a2847 25%, #1e3a7a 50%, #2d4a9e 75%, #4a2d7a 100%);
+            color: var(--texte-principal);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 0;
+            position: relative;
+            overflow: auto;
+        }
+
+        /* Effets de flou visibles */
+        .blur-spot {
+            position: fixed;
+            border-radius: 50%;
+            filter: blur(120px);
+            z-index: 0;
+            pointer-events: none;
+        }
+        .blur-1 {
+            width: 500px;
+            height: 500px;
+            background: rgba(75, 45, 150, 0.8);
+            top: 10%;
+            right: 15%;
+        }
+        .blur-2 {
+            width: 400px;
+            height: 400px;
+            background: rgba(100, 50, 200, 0.7);
+            bottom: 15%;
+            left: 10%;
+        }
+        .blur-3 {
+            width: 350px;
+            height: 350px;
+            background: rgba(60, 30, 120, 0.9);
+            top: 50%;
+            left: 40%;
+        }
+        .blur-4 {
+            width: 450px;
+            height: 450px;
+            background: rgba(90, 60, 180, 0.6);
+            bottom: 5%;
+            right: 25%;
+        }
+        .blur-5 {
+            width: 300px;
+            height: 300px;
+            background: rgba(110, 70, 190, 0.75);
+            top: 20%;
+            left: 5%;
+        }
+
+        /* --- Conteneur Principal --- */
+        .conteneur-scene {
+            position: relative;
+            width: 90vw;
+            max-width: 700px;
+            aspect-ratio: 208 / 178;
+            z-index: 1;
+            margin: 100px 120px;
+        }
+
+        /* --- Le Tableau Blanc (maintenant sombre) --- */
+        #tableau-blanc {
+            width: 100%;
+            height: 100%;
+            background-color: var(--couleur-tableau);
+            border: 15px solid var(--bordure-tableau);
+            box-shadow: 0 15px 30px var(--ombre);
+            border-radius: 4px;
+            box-sizing: border-box;
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            padding: 2rem;
+        }
+
+        /* --- Le Mètre (la règle) --- */
+        #metre {
+            position: absolute;
+            top: -25px;
+            left: 0;
+            height: 20px;
+            width: 0;
+            background-color: var(--couleur-metre);
+            background-image: repeating-linear-gradient(
+                90deg,
+                #333,
+                #333 1px,
+                transparent 1px,
+                transparent 5%
+            );
+            border: 1px solid #333;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+            transform-origin: 0 0;
+            transition: width var(--duree-animation) cubic-bezier(0.65, 0, 0.35, 1), 
+                        transform var(--duree-animation) cubic-bezier(0.65, 0, 0.35, 1);
+        }
+
+        /* --- Texte des Mesures --- */
+        .mesure-texte {
+            position: absolute;
+            background-color: rgba(10, 22, 40, 0.9);
+            border: 1px solid var(--bordure-tableau);
+            padding: 8px 16px;
+            border-radius: 5px;
+            font-size: clamp(1rem, 2.5vw, 1.5rem);
+            font-weight: bold;
+            color: var(--texte-principal);
+            opacity: 0;
+            transition: opacity 0.5s ease-in-out;
+            pointer-events: none;
+            white-space: nowrap;
+        }
+        
+        #mesure-largeur {
+            top: -60px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 10;
+        }
+
+        #mesure-hauteur {
+            top: 50%;
+            left: -70px;
+            transform: translateY(-50%) rotate(-90deg);
+            transform-origin: center;
+            z-index: 10;
+        }
+
+        /* --- Style pour le texte final au centre --- */
+        #texte-final {
+            font-size: clamp(1rem, 3vw, 1.8rem);
+            line-height: 1.6;
+            opacity: 1;
+            color: #a8c0ff;
+            position: relative;
+            z-index: 1;
+        }
+
+        /* --- Vidéo minuscule (grain de riz) - POSITION MODIFIÉE --- */
+        #video-minuscule {
+            position: absolute;
+            width: 3px;
+            height: 2px;
+            top: 25%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 2;
+            object-fit: cover;
+        }
+
+        /* --- Bouton de zoom --- */
+        #bouton-zoom {
+            position: fixed;
+            top: 30px;
+            right: 30px;
+            padding: 12px 24px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+            transition: all 0.3s ease;
+            z-index: 1000;
+        }
+
+        #bouton-zoom:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+        }
+
+        #bouton-zoom:active {
+            transform: translateY(0);
+        }
+
+        /* --- Overlay pour le zoom --- */
+        #overlay-zoom {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100vh;
+            background: rgba(0, 0, 0, 0);
+            display: none;
+            z-index: 9999;
+            pointer-events: none;
+            overflow: hidden;
+        }
+
+        #overlay-zoom.active {
+            display: block;
+            pointer-events: all;
+        }
+
+        /* --- Conteneur vidéo qui va zoomer --- */
+        #video-zoom-container {
+            position: fixed;
+            width: 3px;
+            height: 2px;
+            z-index: 10000;
+            transition: all 2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+        }
+
+        #video-zoom-container.zooming {
+            width: 100vw !important;
+            height: 100vh !important;
+            top: 0 !important;
+            left: 0 !important;
+            transform: none !important;
+        }
+
+        #video-zoom {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            box-shadow: 0 0 100px rgba(102, 126, 234, 0.8);
+        }
+
+        /* --- Cercles de zoom animés --- */
+        .cercle-zoom {
+            position: fixed;
+            border: 4px solid rgba(102, 126, 234, 0.8);
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 9998;
+            animation: expansion-cercle 2s ease-out forwards;
+        }
+
+        @keyframes expansion-cercle {
+            0% {
+                width: 10px;
+                height: 10px;
+                opacity: 1;
+            }
+            50% {
+                opacity: 0.6;
+            }
+            100% {
+                width: 150vw;
+                height: 150vh;
+                opacity: 0;
+            }
+        }
+
+        /* --- Effet de fond qui s'assombrit --- */
+        #overlay-zoom.active::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.95);
+            animation: fondu-fond 2s ease-out forwards;
+            pointer-events: none;
+            z-index: 9999;
+        }
+
+        @keyframes fondu-fond {
+            0% {
+                opacity: 0;
+            }
+            100% {
+                opacity: 1;
+            }
+        }
+
+        /* --- Lignes de vitesse pour effet de zoom --- */
+        .ligne-vitesse {
+            position: fixed;
+            width: 2px;
+            height: 100px;
+            background: linear-gradient(to bottom, transparent, rgba(102, 126, 234, 0.8), transparent);
+            pointer-events: none;
+            z-index: 9997;
+            animation: ligne-zoom 1.5s ease-out forwards;
+        }
+
+        @keyframes ligne-zoom {
+            0% {
+                opacity: 0;
+                transform: scale(0.5);
+            }
+            30% {
+                opacity: 1;
+            }
+            100% {
+                opacity: 0;
+                transform: scale(3) translateX(var(--tx)) translateY(var(--ty));
+            }
+        }
+
+        /* --- Texte sur la vidéo - côté gauche avec apparition progressive --- */
+        #texte-video {
+            position: fixed;
+            top: 50%;
+            left: 5%;
+            transform: translateY(-50%);
+            font-family: 'Georgia', 'Times New Roman', serif;
+            font-size: clamp(1.5rem, 3.5vw, 3rem);
+            font-weight: 700;
+            color: #ffffff;
+            text-shadow: 
+                3px 3px 10px rgba(0, 0, 0, 1),
+                0 0 30px rgba(102, 126, 234, 0.8),
+                0 0 50px rgba(255, 255, 255, 0.3);
+            opacity: 0;
+            text-align: left;
+            padding: 40px 50px;
+            background: rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(12px);
+            border-left: 8px solid #667eea;
+            border-radius: 15px;
+            box-shadow: 
+                0 10px 50px rgba(0, 0, 0, 0.9),
+                inset 0 0 30px rgba(102, 126, 234, 0.3);
+            z-index: 100000;
+            pointer-events: none;
+            max-width: 45%;
+            line-height: 1.8;
+            letter-spacing: 1px;
+            transition: opacity 0.2s ease-out;
+        }
+
+        /* Indicateur de scroll */
+        #scroll-indicator {
+            position: fixed;
+            bottom: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #ffffff;
+            font-size: 18px;
+            font-weight: 600;
+            opacity: 0;
+            z-index: 99998;
+            text-align: center;
+            transition: opacity 0.5s ease;
+            pointer-events: none;
+            text-shadow: 0 2px 10px rgba(0, 0, 0, 0.8);
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px 30px;
+            border-radius: 10px;
+        }
+
+        #scroll-indicator.visible {
+            opacity: 1;
+            animation: bounce 2s ease-in-out infinite;
+        }
+
+        @keyframes bounce {
+            0%, 100% {
+                transform: translateX(-50%) translateY(0);
+            }
+            50% {
+                transform: translateX(-50%) translateY(-10px);
+            }
+        }
+
+        .scroll-arrow {
+            font-size: 28px;
+            display: block;
+            margin-top: 5px;
+        }
+
+        /* Barre de progression */
+        #progress-bar {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 300px;
+            height: 8px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+            overflow: hidden;
+            z-index: 99999;
+            opacity: 0;
+            transition: opacity 0.5s ease;
+        }
+
+        #progress-bar.visible {
+            opacity: 1;
+        }
+
+        #progress-fill {
+            width: 0%;
+            height: 100%;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            border-radius: 10px;
+            transition: width 0.1s ease-out;
+        }
+
+        /* --- PAGE NOIRE AVEC TEXTE MACHINE À ÉCRIRE --- */
+        #page-noire {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100vh;
+            background: #000000;
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 200000;
+            opacity: 0;
+            transition: opacity 1s ease-in-out;
+        }
+
+        #page-noire.visible {
+            display: flex;
+            opacity: 1;
+        }
+
+        #texte-machine {
+            font-family: 'Courier New', monospace;
+            font-size: clamp(1.2rem, 3vw, 2.5rem);
+            color: #ffffff;
+            text-align: center;
+            padding: 40px;
+            max-width: 85%;
+            line-height: 1.8;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+
+        #texte-machine::after {
+            content: '|';
+            animation: clignotement-curseur 0.75s step-end infinite;
+        }
+
+        @keyframes clignotement-curseur {
+            from, to {
+                opacity: 1;
+            }
+            50% {
+                opacity: 0;
+            }
+        }
+
+        #texte-machine.termine::after {
+            content: '';
+            animation: none;
+        }
+
+    </style>
+</head>
+<body>
+    <!-- Effets de flou en arrière-plan -->
+    <div class="blur-spot blur-1"></div>
+    <div class="blur-spot blur-2"></div>
+    <div class="blur-spot blur-3"></div>
+    <div class="blur-spot blur-4"></div>
+    <div class="blur-spot blur-5"></div>
+
+    <!-- Bouton de zoom -->
+    <button id="bouton-zoom">Continuer</button>
+
+    <div class="conteneur-scene">
+        <div id="tableau-blanc">
+            <div id="texte-final">
+                Dimensions: Il Mesure mesure 274,3 x 274,3 cm.
+            </div>
+            <!-- Vidéo minuscule (grain de riz) - Position modifiée -->
+            <video id="video-minuscule" muted loop autoplay>
+                <source src="video2.mp4" type="video/mp4">
+            </video>
+        </div>
+        <div id="metre"></div>
+        <div id="mesure-largeur" class="mesure-texte"></div>
+        <div id="mesure-hauteur" class="mesure-texte"></div>
+    </div>
+
+    <!-- Overlay pour le zoom -->
+    <div id="overlay-zoom">
+        <div id="video-zoom-container">
+            <video id="video-zoom" loop>
+                <source src="video2.mp4" type="video/mp4">
+            </video>
+        </div>
+        <div id="texte-video">Cette œuvre est conservée à la Fondation Louis Vuitton, à Paris.
+</div>
+        <div id="scroll-indicator">
+            Utilisez la molette de votre souris
+            <span class="scroll-arrow">↓</span>
+        </div>
+        <div id="progress-bar">
+            <div id="progress-fill"></div>
+        </div>
+    </div>
+
+    <!-- Page noire avec texte machine à écrire -->
+    <div id="page-noire">
+        <div id="texte-machine"></div>
+    </div>
+
+    <script>
+        // --- Logique JavaScript pour l'animation ---
+
+        const tableauBlanc = document.getElementById('tableau-blanc');
+        const metre = document.getElementById('metre');
+        const texteLargeur = document.getElementById('mesure-largeur');
+        const texteHauteur = document.getElementById('mesure-hauteur');
+        const boutonZoom = document.getElementById('bouton-zoom');
+        const overlayZoom = document.getElementById('overlay-zoom');
+        const videoZoomContainer = document.getElementById('video-zoom-container');
+        const videoZoom = document.getElementById('video-zoom');
+        const texteVideo = document.getElementById('texte-video');
+        const videoMinuscule = document.getElementById('video-minuscule');
+        const scrollIndicator = document.getElementById('scroll-indicator');
+        const progressBar = document.getElementById('progress-bar');
+        const progressFill = document.getElementById('progress-fill');
+        const pageNoire = document.getElementById('page-noire');
+        const texteMachine = document.getElementById('texte-machine');
+
+        let zoomComplete = false;
+        let scrollAmount = 0; // Accumulation du scroll
+        const maxScrollAmount = 500; // Quantité de scroll nécessaire pour atteindre 100%
+        let texteComplet = false; // Le premier texte est-il complètement affiché?
+        let scrollAmountPhase2 = 0; // Scroll pour la phase 2
+        const maxScrollAmountPhase2 = 300; // Scroll nécessaire pour déclencher la page noire
+
+        // Dimensions cibles - MODIFIÉES ICI
+        const LARGEUR_FINALE = 274.3;
+        const HAUTEUR_FINALE = 274.3;
+        const DUREE_ANIMATION_MS = 2500;
+
+        /**
+         * Anime un compteur de 0 à une valeur finale.
+         * @param {HTMLElement} element - L'élément HTML qui affiche le nombre.
+         * @param {number} valeurFinale - La valeur à atteindre.
+         * @param {string} unite - Le suffixe (ex: " cm").
+         */
+        function animerCompteur(element, valeurFinale, unite) {
+            let valeurActuelle = 0;
+            const increment = valeurFinale / (DUREE_ANIMATION_MS / 16.7);
+
+            const intervalle = setInterval(() => {
+                valeurActuelle += increment;
+                if (valeurActuelle >= valeurFinale) {
+                    valeurActuelle = valeurFinale;
+                    clearInterval(intervalle);
+                }
+                element.textContent = `${valeurActuelle.toFixed(1)} ${unite}`;
+            }, 16.7);
+        }
+
+        /**
+         * Fonction principale qui lance la séquence d'animation.
+         */
+        function lancerAnimation() {
+            // --- ÉTAPE 1 : Mesure de la largeur ---
+            setTimeout(() => {
+                texteLargeur.style.opacity = '1';
+                animerCompteur(texteLargeur, LARGEUR_FINALE, "cm");
+                metre.style.width = '100%';
+            }, 500);
+
+            // --- ÉTAPE 2 : Mesure de la hauteur ---
+            const delaiEtape2 = DUREE_ANIMATION_MS + 1000;
+            setTimeout(() => {
+                metre.style.transition = 'none';
+                metre.style.width = '0';
+                metre.style.top = '0';
+                metre.style.left = '-25px';
+                metre.style.transform = 'rotate(90deg)';
+                void metre.offsetWidth; 
+                metre.style.transition = `width ${DUREE_ANIMATION_MS / 1000}s cubic-bezier(0.65, 0, 0.35, 1)`;
+                
+                texteHauteur.style.opacity = '1';
+                animerCompteur(texteHauteur, HAUTEUR_FINALE, "cm");
+
+                const hauteurTableau = tableauBlanc.offsetHeight;
+                metre.style.width = `${hauteurTableau}px`;
+
+            }, delaiEtape2);
+        }
+
+        /**
+         * Crée des cercles concentriques qui s'expandent
+         */
+        function creerCerclesZoom(x, y) {
+            for (let i = 0; i < 4; i++) {
+                setTimeout(() => {
+                    const cercle = document.createElement('div');
+                    cercle.className = 'cercle-zoom';
+                    cercle.style.left = x + 'px';
+                    cercle.style.top = y + 'px';
+                    cercle.style.transform = 'translate(-50%, -50%)';
+                    document.body.appendChild(cercle);
+                    
+                    setTimeout(() => cercle.remove(), 2000);
+                }, i * 200);
+            }
+        }
+
+        /**
+         * Crée des lignes de vitesse partant du centre
+         */
+        function creerLignesVitesse(centreX, centreY) {
+            const nombreLignes = 20;
+            for (let i = 0; i < nombreLignes; i++) {
+                const angle = (Math.PI * 2 * i) / nombreLignes;
+                const ligne = document.createElement('div');
+                ligne.className = 'ligne-vitesse';
+                ligne.style.left = centreX + 'px';
+                ligne.style.top = centreY + 'px';
+                ligne.style.transform = `translate(-50%, -50%) rotate(${angle}rad)`;
+                
+                const distance = 1000;
+                ligne.style.setProperty('--tx', Math.cos(angle) * distance + 'px');
+                ligne.style.setProperty('--ty', Math.sin(angle) * distance + 'px');
+                
+                document.body.appendChild(ligne);
+                
+                setTimeout(() => ligne.remove(), 1500);
+            }
+        }
+
+        /**
+         * Anime le texte avec effet machine à écrire
+         */
+        function animerTexteMachine() {
+            const phrase = "Je retiens qu'Andy Warhol\nse montre comme\nun homme mystérieux et serieux.";
+            let index = 0;
+            texteMachine.textContent = '';
+            
+            const intervalle = setInterval(() => {
+                if (index < phrase.length) {
+                    texteMachine.textContent += phrase[index];
+                    index++;
+                } else {
+                    clearInterval(intervalle);
+                    texteMachine.classList.add('termine');
+                }
+            }, 80); // Vitesse de frappe (80ms par caractère)
+        }
+
+        /**
+         * Gère le zoom progressif sur la vidéo
+         */
+        boutonZoom.addEventListener('click', () => {
+            // Obtenir la position exacte de la petite vidéo
+            const rectVideo = videoMinuscule.getBoundingClientRect();
+            const centreX = rectVideo.left + rectVideo.width / 2;
+            const centreY = rectVideo.top + rectVideo.height / 2;
+            
+            // Positionner le conteneur de zoom à l'emplacement exact de la petite vidéo
+            videoZoomContainer.style.left = centreX + 'px';
+            videoZoomContainer.style.top = centreY + 'px';
+            videoZoomContainer.style.transform = 'translate(-50%, -50%)';
+            videoZoomContainer.style.width = '3px';
+            videoZoomContainer.style.height = '2px';
+            
+            // Afficher l'overlay
+            overlayZoom.classList.add('active');
+            
+            // Créer les effets visuels
+            creerCerclesZoom(centreX, centreY);
+            
+            setTimeout(() => {
+                creerLignesVitesse(centreX, centreY);
+            }, 300);
+            
+            // Lancer le zoom progressif après un très court délai
+            setTimeout(() => {
+                videoZoomContainer.classList.add('zooming');
+                videoZoom.currentTime = 0;
+                videoZoom.play();
+                
+                // Après le zoom, activer la détection de la molette
+                setTimeout(() => {
+                    zoomComplete = true;
+                    scrollAmount = 0;
+                    scrollIndicator.classList.add('visible');
+                    progressBar.classList.add('visible');
+                    
+                    console.log('✅ Zoom terminé ! Utilisez la molette de votre souris.');
+                }, 2000);
+            }, 50);
+        });
+
+        /**
+         * Détecte le mouvement de la molette pour afficher le texte progressivement
+         */
+        overlayZoom.addEventListener('wheel', (e) => {
+            if (zoomComplete && !texteComplet) {
+                // PHASE 1 : Afficher le premier texte
+                e.preventDefault();
+                
+                if (e.deltaY > 0) {
+                    scrollAmount += Math.abs(e.deltaY);
+                } else {
+                    scrollAmount -= Math.abs(e.deltaY);
+                }
+                
+                scrollAmount = Math.max(0, Math.min(scrollAmount, maxScrollAmount));
+                const opacity = scrollAmount / maxScrollAmount;
+                
+                texteVideo.style.opacity = opacity;
+                
+                const progressPercent = (scrollAmount / maxScrollAmount) * 100;
+                progressFill.style.width = progressPercent + '%';
+                
+                if (scrollAmount > 10) {
+                    scrollIndicator.classList.remove('visible');
+                }
+                
+                // Quand on atteint 100%, le texte est complet
+                if (scrollAmount >= maxScrollAmount) {
+                    texteComplet = true;
+                    scrollAmountPhase2 = 0;
+                    console.log('✅ Texte 1 complet ! Continuez à scroller pour la suite...');
+                    
+                    // Changer l'indicateur
+                    setTimeout(() => {
+                        scrollIndicator.innerHTML = 'Continuez à scroller<span class="scroll-arrow">↓</span>';
+                        scrollIndicator.classList.add('visible');
+                        progressFill.style.width = '0%';
+                    }, 1000);
+                }
+                
+            } else if (texteComplet) {
+                // PHASE 2 : Déclencher la page noire
+                e.preventDefault();
+                
+                if (e.deltaY > 0) {
+                    scrollAmountPhase2 += Math.abs(e.deltaY);
+                } else {
+                    scrollAmountPhase2 -= Math.abs(e.deltaY);
+                }
+                
+                scrollAmountPhase2 = Math.max(0, Math.min(scrollAmountPhase2, maxScrollAmountPhase2));
+                
+                const progressPercent2 = (scrollAmountPhase2 / maxScrollAmountPhase2) * 100;
+                progressFill.style.width = progressPercent2 + '%';
+                
+                console.log('🖱️ Phase 2 - Scroll:', scrollAmountPhase2);
+                
+                // Déclencher la page noire
+                if (scrollAmountPhase2 >= maxScrollAmountPhase2) {
+                    console.log('🎬 Déclenchement de la page noire !');
+                    scrollIndicator.classList.remove('visible');
+                    progressBar.classList.remove('visible');
+                    
+                    // Afficher la page noire
+                    pageNoire.classList.add('visible');
+                    
+                    // Lancer l'animation du texte après un court délai
+                    setTimeout(() => {
+                        animerTexteMachine();
+                    }, 500);
+                }
+            }
+        }, { passive: false });
+
+        window.addEventListener('load', lancerAnimation);
+    </script>
+</body>
+</html>

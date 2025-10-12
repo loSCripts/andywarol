@@ -1,0 +1,938 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Appareil Photo 3D</title>
+    <link href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:wght@700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            overflow-x: hidden;
+            background: #000;
+            font-family: Arial, sans-serif;
+            cursor: none;
+            position: relative;
+        }
+
+        #backgroundVideo {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            object-fit: cover;
+            z-index: 0;
+        }
+
+        #gradientBackground {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: linear-gradient(135deg, #000000 0%, #1a1a1a 25%, #2d2d2d 50%, #1a1a1a 75%, #000000 100%);
+            z-index: 0;
+            opacity: 0;
+            transition: opacity 0.5s ease;
+            pointer-events: none;
+        }
+
+        .blur-spot {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(120px);
+        }
+        .blur-1 {
+            width: 500px;
+            height: 500px;
+            background: rgba(50, 50, 50, 0.8);
+            top: 10%;
+            right: 15%;
+        }
+        .blur-2 {
+            width: 400px;
+            height: 400px;
+            background: rgba(80, 80, 80, 0.7);
+            bottom: 15%;
+            left: 10%;
+        }
+        .blur-3 {
+            width: 350px;
+            height: 350px;
+            background: rgba(30, 30, 30, 0.9);
+            top: 50%;
+            left: 40%;
+        }
+        .blur-4 {
+            width: 450px;
+            height: 450px;
+            background: rgba(60, 60, 60, 0.6);
+            bottom: 5%;
+            right: 25%;
+        }
+        .blur-5 {
+            width: 300px;
+            height: 300px;
+            background: rgba(70, 70, 70, 0.75);
+            top: 20%;
+            left: 5%;
+        }
+        
+        #section1 {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            transition: transform 0.3s ease-out, opacity 0.3s ease-out;
+            transform-origin: center center;
+            z-index: 3;
+        }
+        
+        #canvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+        
+        #text-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: flex-start;
+            pointer-events: none;
+            padding: 40px;
+            box-sizing: border-box;
+        }
+        
+        .text-group {
+            display: flex;
+            flex-direction: column;
+            position: absolute;
+        }
+        
+        .text-line {
+            text-align: left;
+            font-family: 'Bodoni Moda', serif;
+            font-size: 240px;
+            font-weight: 700;
+            line-height: 0.9;
+            pointer-events: all;
+            margin: 0;
+        }
+        
+        @keyframes fadeInOut {
+            0% { opacity: 1; transform: translateX(0) scale(1); filter: blur(0px); }
+            40% { opacity: 1; transform: translateX(0) scale(1); filter: blur(0px); }
+            50% { opacity: 0; transform: translateX(-50px) scale(0.95); filter: blur(8px); }
+            100% { opacity: 0; transform: translateX(-50px) scale(0.95); filter: blur(8px); }
+        }
+        
+        .text-line.alt {
+            animation: fadeInOutAlt 10s ease-in-out infinite;
+        }
+        
+        @keyframes fadeInOutAlt {
+            0% { opacity: 0; transform: translateX(50px) scale(0.95); filter: blur(8px); }
+            50% { opacity: 0; transform: translateX(50px) scale(0.95); filter: blur(8px); }
+            60% { opacity: 1; transform: translateX(0) scale(1); filter: blur(0px); }
+            90% { opacity: 1; transform: translateX(0) scale(1); filter: blur(0px); }
+            100% { opacity: 0; transform: translateX(-50px) scale(0.95); filter: blur(8px); }
+        }
+        
+        #line1 { margin-bottom: 20px; }
+        #line2 { padding-left: 60px; letter-spacing: -8px; font-size: 220px; }
+        #line3 { margin-bottom: 20px; }
+        #line4 { padding-left: 60px; letter-spacing: -8px; font-size: 220px; }
+        
+        .group1 { animation: fadeInOut 10s ease-in-out infinite; }
+        .group2 { animation: fadeInOutAlt 10s ease-in-out infinite; }
+        
+        .letter {
+            display: inline-block;
+            color: #ffffff;
+            transition: all 0.4s ease;
+            cursor: default;
+            position: relative;
+        }
+        
+        .letter:hover {
+            color: #f0f0f0;
+            transform: scale(1.08) rotate(-2deg);
+            text-shadow: 2px 2px 0px rgba(255, 255, 255, 0.3), -1px -1px 0px rgba(255, 255, 255, 0.2);
+            font-style: italic;
+        }
+        
+        .paint-splash {
+            position: absolute;
+            background: #8b5cf6;
+            border-radius: 40% 60% 50% 70%;
+            opacity: 0.7;
+            filter: blur(1px);
+            pointer-events: none;
+        }
+        
+        .splash1 { width: 180px; height: 150px; top: 15%; right: 25%; transform: rotate(25deg); box-shadow: inset -10px -10px 20px rgba(0,0,0,0.3); }
+        .splash2 { width: 120px; height: 140px; bottom: 20%; left: 15%; transform: rotate(-45deg); border-radius: 30% 70% 60% 40%; box-shadow: inset 8px 8px 15px rgba(0,0,0,0.2); }
+        .splash3 { width: 95px; height: 110px; top: 60%; right: 15%; transform: rotate(78deg); border-radius: 55% 45% 70% 30%; opacity: 0.6; box-shadow: inset -5px 10px 18px rgba(0,0,0,0.25); }
+        .splash4 { width: 70px; height: 85px; top: 35%; left: 35%; transform: rotate(-15deg); border-radius: 65% 35% 50% 50%; opacity: 0.5; }
+        
+        #instructions {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: white;
+            background: rgba(255, 255, 255, 0.15);
+            padding: 15px 30px;
+            border-radius: 15px;
+            text-align: center;
+            backdrop-filter: blur(15px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+            z-index: 10;
+        }
+        
+        #section3Instructions {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: white;
+            background: rgba(139, 92, 246, 0.2);
+            padding: 12px 25px;
+            border-radius: 15px;
+            text-align: center;
+            backdrop-filter: blur(15px);
+            border: 1px solid rgba(139, 92, 246, 0.3);
+            box-shadow: 0 8px 32px 0 rgba(139, 92, 246, 0.3);
+            z-index: 10;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+            font-size: 14px;
+        }
+        
+        #section3Instructions.visible { opacity: 1; }
+        
+        #custom-cursor {
+            position: fixed;
+            width: 30px;
+            height: 30px;
+            pointer-events: none;
+            z-index: 9999;
+            transform: translate(-50%, -50%);
+        }
+        
+        .sparkle {
+            position: fixed;
+            width: 8px;
+            height: 8px;
+            background: #8b5cf6;
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 9998;
+            animation: sparkleAnim 0.8s ease-out forwards;
+            box-shadow: 0 0 10px #8b5cf6;
+        }
+        
+        @keyframes sparkleAnim {
+            0% { opacity: 1; transform: scale(1); }
+            100% { opacity: 0; transform: scale(0.3); }
+        }
+        
+        .marquee-container {
+            position: fixed;
+            width: 100%;
+            overflow: hidden;
+            z-index: 5;
+            pointer-events: none;
+        }
+        
+        .marquee-top { top: 0; background: rgba(0, 0, 0, 0.6); backdrop-filter: blur(5px); }
+        .marquee-bottom { bottom: 0; background: rgba(0, 0, 0, 0.6); backdrop-filter: blur(5px); }
+        
+        .marquee-content {
+            display: flex;
+            animation: scroll 25s linear infinite;
+            white-space: nowrap;
+        }
+        
+        .marquee-bottom .marquee-content { animation: scrollReverse 25s linear infinite; }
+        
+        @keyframes scroll {
+            0% { transform: translateX(0); }
+            100% { transform: translateX(-50%); }
+        }
+        
+        @keyframes scrollReverse {
+            0% { transform: translateX(-50%); }
+            100% { transform: translateX(0); }
+        }
+        
+        .marquee-text {
+            font-family: 'Comic Sans MS', cursive, sans-serif;
+            font-size: 28px;
+            font-weight: bold;
+            padding: 15px 40px;
+            display: inline-block;
+        }
+
+        #spacer { height: 100vh; position: relative; z-index: 1; }
+        
+        #section2 {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.5s ease-out;
+            z-index: 2;
+        }
+        
+        #section2.visible { opacity: 1; pointer-events: all; }
+        
+        #videoContainer { width: 100%; height: 100%; position: relative; overflow: hidden; }
+        
+        #bgVideo {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            min-width: 100%;
+            min-height: 100%;
+            width: auto;
+            height: auto;
+            object-fit: cover;
+        }
+
+        #videoText {
+            position: fixed;
+            top: 50%;
+            right: 3%;
+            transform: translateY(-50%);
+            font-size: 16px;
+            color: white;
+            text-shadow: 0 0 10px rgba(255, 255, 255, 0.8), 0 0 20px rgba(255, 255, 255, 0.6), 0 0 30px rgba(255, 255, 255, 0.4);
+            line-height: 2.5;
+            text-align: right;
+            max-width: 400px;
+            pointer-events: none;
+            z-index: 100;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        #videoText.visible { opacity: 1; }
+        #videoText .word { opacity: 0; transition: opacity 0.3s ease; }
+        #videoText .word.visible { opacity: 1; }
+
+        #videoSpacer { height: 300vh; position: relative; z-index: 1; }
+
+        #section3 { position: relative; min-height: 300vh; background: transparent; z-index: 4; }
+
+        #stickyContainer {
+            position: sticky;
+            top: 0;
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            padding: 0 2% 0 2%;
+            transition: none;
+        }
+
+        #stickyImageWrapper { position: relative; width: 40%; max-width: 600px; margin-left: -5%; }
+
+        #stickyImage {
+            width: 100%;
+            height: auto;
+            border-radius: 10px;
+            box-shadow: 0 20px 60px rgba(255, 255, 255, 0.2);
+            display: block;
+        }
+
+        #dimensionsButton {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            font-size: 16px;
+            font-weight: 600;
+            border-radius: 50px;
+            cursor: pointer;
+            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-block;
+            backdrop-filter: blur(10px);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+        }
+
+        #dimensionsButton:hover {
+            transform: translateX(-50%) translateY(-5px) scale(1.05);
+            box-shadow: 0 15px 40px rgba(102, 126, 234, 0.6);
+            background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+        }
+
+        #dimensionsButton:active { transform: translateX(-50%) translateY(-2px) scale(1.02); }
+
+        #scrollableContent {
+            position: absolute;
+            right: 5%;
+            top: 20vh;
+            width: 50%;
+            color: #a8c0ff;
+            font-size: 18px;
+            line-height: 1.6;
+            padding-bottom: 100vh;
+            transition: none;
+            text-shadow: 0 0 20px rgba(168, 192, 255, 0.5);
+        }
+
+        #scrollableContent .content-word { opacity: 0; transition: opacity 0.3s ease; }
+        #scrollableContent .content-word.visible { opacity: 1; }
+
+        #imagePopup {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0, 0, 0, 0.95);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 10000;
+            opacity: 1;
+            transition: opacity 0.3s ease;
+        }
+
+        #imagePopup.hidden { opacity: 0; pointer-events: none; }
+
+        #imagePopup img {
+            max-width: 90%;
+            max-height: 90%;
+            object-fit: contain;
+            box-shadow: 0 0 50px rgba(255, 255, 255, 0.3);
+        }
+
+        #imagePopup .close-hint {
+            position: absolute;
+            bottom: 30px;
+            color: white;
+            font-size: 16px;
+            opacity: 0.7;
+        }
+    </style>
+</head>
+<body>
+    <video id="backgroundVideo" autoplay loop muted playsinline>
+        <source src="video.mp4" type="video/mp4">
+    </video>
+
+    <div id="gradientBackground">
+        <div class="blur-spot blur-1"></div>
+        <div class="blur-spot blur-2"></div>
+        <div class="blur-spot blur-3"></div>
+        <div class="blur-spot blur-4"></div>
+        <div class="blur-spot blur-5"></div>
+    </div>
+
+    <div id="imagePopup">
+        <img src="image.png" alt="Photographie à étudier">
+        <div class="close-hint">Appuyez sur A pour fermer/ouvrir</div>
+    </div>
+
+    <div id="section1">
+        <div id="custom-cursor">
+            <svg viewBox="0 0 30 40" xmlns="http://www.w3.org/2000/svg">
+                <path d="M 5 2 Q 3 3 3 7 L 2 28 Q 2 32 6 34 L 12 38 Q 14 39 16 37 L 27 20 Q 29 18 27 16 L 22 12 L 28 9 Q 30 7 28 5 L 8 1 Q 6 0.5 5 2 Z" fill="#8b5cf6" stroke="#6d28d9" stroke-width="1.5" opacity="0.9"/>
+                <path d="M 7 5 L 8 22 L 11 24 L 18 15 L 14 12" fill="none" stroke="#a78bfa" stroke-width="1" opacity="0.6"/>
+            </svg>
+        </div>
+        
+        <div class="marquee-container marquee-top">
+            <div class="marquee-content" id="marquee-top-content"></div>
+        </div>
+        
+        <div class="marquee-container marquee-bottom">
+            <div class="marquee-content" id="marquee-bottom-content"></div>
+        </div>
+        
+        <div id="instructions">
+            🖱️ Utilisez votre souris pour faire tourner l'appareil photo | Défilez pour découvrir la suite
+        </div>
+        
+        <canvas id="canvas"></canvas>
+        
+        <div id="text-overlay">
+            <div class="paint-splash splash1"></div>
+            <div class="paint-splash splash2"></div>
+            <div class="paint-splash splash3"></div>
+            <div class="paint-splash splash4"></div>
+            <div class="text-group group1">
+                <div class="text-line" id="line1"></div>
+                <div class="text-line" id="line2"></div>
+            </div>
+            <div class="text-group group2">
+                <div class="text-line" id="line3"></div>
+                <div class="text-line" id="line4"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="spacer"></div>
+    
+    <div id="section2">
+        <div id="videoContainer">
+            <video id="bgVideo" autoplay loop muted playsinline>
+                <source src="video.mp4" type="video/mp4">
+            </video>
+        </div>
+        <div id="videoText"></div>
+    </div>
+
+    <div id="videoSpacer"></div>
+
+    <div id="section3">
+        <div id="stickyContainer">
+            <div id="stickyImageWrapper">
+                <img id="stickyImage" src="image.png" alt="Image collante">
+                <a href="mesure.html" id="dimensionsButton">Voir les dimensions, et autres</a>
+            </div>
+        </div>
+        <div id="scrollableContent"></div>
+    </div>
+
+    <div id="section3Instructions">
+        ⌨️ Appuyez sur ESPACE pour afficher tout le texte instantanément
+    </div>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        const imagePopup = document.getElementById('imagePopup');
+        const section3Instructions = document.getElementById('section3Instructions');
+        
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'a' || e.key === 'A') {
+                imagePopup.classList.toggle('hidden');
+            }
+            
+            if (e.key === ' ' && isInSection3 && !allContentWordsDisplayed) {
+                e.preventDefault();
+                contentWords.forEach(word => word.classList.add('visible'));
+                currentContentWordIndex = contentWords.length;
+                allContentWordsDisplayed = true;
+                section3Instructions.classList.remove('visible');
+            }
+        });
+
+        const videoTextContent = "L'œuvre Self-Portrait (1986) a été réalisée par Andy Warhol en 1986. Défiler pour voir la suite";
+        const videoTextElement = document.getElementById('videoText');
+        const words = videoTextContent.split(' ');
+        
+        words.forEach(word => {
+            const span = document.createElement('span');
+            span.className = 'word';
+            span.textContent = word + ' ';
+            videoTextElement.appendChild(span);
+        });
+
+        const stickyTextContent = "Andy Warhol a réalisé Self-Portrait (1986) en utilisant d'abord un appareil photo Polaroid pour se prendre en photo, avec un éclairage très fort qui met en valeur son visage et sa célèbre perruque blanche. Il a ensuite transformé cette photo en image sérigraphique, en créant un pochoir sur un écran de soie à partir de la photo. Sur une toile préparée, il a appliqué de la peinture acrylique pour le fond, puis a déposé l'encre colorée à travers l'écran à l'aide d'une racle, imprimant ainsi son visage en teintes violettes. Enfin, il a parfois ajouté de petites retouches au pinceau et une couche protectrice de vernis pour fixer l'ensemble. En résumé Sa technique consiste à mêler photographie peinture et sérigraphie. PARAGRAPH_BREAK La sérigraphie une technique d'impression artisanale qui consiste à imprimer une encre sur un support (papier, textile, bois…) à l'aide d'un ou plusieurs pochoirs appelés « écrans de sérigraphie ». Chaque écran permet d'appliquer une couleur différente. PARAGRAPH_BREAK Il y a 2 plans : Au premier plan, je vois le visage d'Andy Warhol, éclairé en violet( mais avec cependant quelques touches de noir comme par exemple : des ombres ..., )et des cheveux en bataille , (Ce ne sont pas vraiment ses cheveux mais plutôt une perruque souvent appelée fright wig ). À l'arrière-plan, je vois un fond noir et des petits points (ou des trais) de violet dû à la sérigraphie , qui fait ressortir fortement le premier plan, et les traits de son visage. Les couleurs dominantes sont le violet et le noir et, la forme dominante est le visage de Andy Warhol. L'artiste représente son visage en gros plan. PARAGRAPH_BREAK 3 ANALYSE PARAGRAPH_BREAK Dans cet autoportrait, Andy Warhol se montre en gros plan d'une expressions et d'un regard sérieux, son visage est sérieux, sans sourire ,il regarde droit devant lui. Ce qui attire tout de suite le regard, c'est ses cheveux en bataille (en réalité une perruque). Je ne ressens pas d'émotions particulières en regardant cette Œuvre. Pour cette oeuvre l'artiste utilise une seule couleur qui est le violet Fluorescent très marqués. Ceci est une image travaillée ,tout semble calculé. PARAGRAPH_BREAK 4 Interprétation PARAGRAPH_BREAK J'interprète Cette image comme si l'artiste voulait montrer un mystère autour de lui. Je trouve cette image très mystérieuse dû à son sérieux, et je n'arrive pas vraiment à décrypter les émotions transmises. De plus selon cet autoportrait signifie qu'il ne veut pas se montrer comme une personne ordinaire. PARAGRAPH_BREAK 5. Mise en relation PARAGRAPH_BREAK On peut comparer cet autoportrait d'Andy Warhol à celui de Pablo Picasso et de Frida Kahlo. Comme Warhol, Pablo Picasso a réalisé en 1907 un autoportrait en gros plan, avec son visage peint dans une seule couleur, dans des tons bruns et orangés. Lui aussi simplifie les formes et montre un regard intense. Les deux artistes se concentrent sur le visage, pour exprimer une part de leur personnalité sans tout montrer. À l'inverse, Frida Kahlo se peint souvent en entier ou en buste, par exemple dans La colonne brisée (1944). On voit tout son corps blessé, et elle utilise plusieurs couleurs vives. Contrairement à Warhol, elle montre ses émotions et sa souffrance.";
+        
+        const scrollableContent = document.getElementById('scrollableContent');
+        const contentParts = stickyTextContent.split('PARAGRAPH_BREAK');
+        
+        contentParts.forEach((paragraph, index) => {
+            const p = document.createElement('p');
+            p.style.marginBottom = '30px';
+            
+            if (index === 1) {
+                p.style.fontStyle = 'italic';
+                p.style.opacity = '0.9';
+            }
+            
+            const words = paragraph.trim().split(' ');
+            words.forEach(word => {
+                const span = document.createElement('span');
+                span.className = 'content-word';
+                span.textContent = word + ' ';
+                p.appendChild(span);
+            });
+            
+            scrollableContent.appendChild(p);
+        });
+
+        const contentWords = scrollableContent.querySelectorAll('.content-word');
+
+        let currentWordIndex = 0;
+        let allWordsDisplayed = false;
+        let currentContentWordIndex = 0;
+        let allContentWordsDisplayed = false;
+        let scrollPositionWhenSection3Reached = 0;
+        let isInSection3 = false;
+
+        const backgroundVideo = document.getElementById('backgroundVideo');
+        const gradientBackground = document.getElementById('gradientBackground');
+
+        const section1 = document.getElementById('section1');
+        const section2 = document.getElementById('section2');
+        const section3 = document.getElementById('section3');
+        const spacer = document.getElementById('spacer');
+        const videoSpacer = document.getElementById('videoSpacer');
+        
+        window.addEventListener('scroll', () => {
+            const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+            const spacerTop = spacer.offsetTop;
+            const spacerBottom = spacerTop + spacer.offsetHeight;
+            const videoSpacerTop = videoSpacer.offsetTop;
+            const videoSpacerBottom = videoSpacerTop + videoSpacer.offsetHeight;
+            const section3Top = section3.offsetTop;
+            const section3Bottom = section3Top + section3.offsetHeight;
+            
+            if (scrollTop < videoSpacerBottom) {
+                backgroundVideo.style.opacity = '1';
+                gradientBackground.style.opacity = '0';
+            } else {
+                backgroundVideo.style.opacity = '0';
+                gradientBackground.style.opacity = '1';
+            }
+
+            if (scrollTop < spacerBottom) {
+                const progress = scrollTop / spacerBottom;
+                const scale = 1 - (progress * 0.8);
+                const opacity = 1 - (progress * 1.2);
+                
+                section1.style.transform = `scale(${Math.max(scale, 0.2)})`;
+                section1.style.opacity = Math.max(opacity, 0);
+            } else {
+                section1.style.opacity = 0;
+            }
+            
+            if (scrollTop >= spacerTop && scrollTop < videoSpacerBottom) {
+                section2.classList.add('visible');
+                videoTextElement.classList.add('visible');
+                
+                const videoProgress = (scrollTop - spacerBottom) / (videoSpacerBottom - spacerBottom);
+                const wordsToShow = Math.floor(videoProgress * words.length * 1.5);
+                
+                const wordElements = videoTextElement.querySelectorAll('.word');
+                for (let i = 0; i < Math.min(wordsToShow, words.length); i++) {
+                    wordElements[i].classList.add('visible');
+                }
+                
+                currentWordIndex = Math.min(wordsToShow, words.length);
+                
+                if (currentWordIndex >= words.length) {
+                    allWordsDisplayed = true;
+                }
+            } else if (scrollTop < spacerTop) {
+                section2.classList.remove('visible');
+                videoTextElement.classList.remove('visible');
+                allWordsDisplayed = false;
+                currentWordIndex = 0;
+                const wordElements = videoTextElement.querySelectorAll('.word');
+                wordElements.forEach(word => word.classList.remove('visible'));
+            } else {
+                section2.classList.remove('visible');
+            }
+
+            if (scrollTop >= section3Top && scrollTop < section3Bottom) {
+                if (!isInSection3) {
+                    isInSection3 = true;
+                    scrollPositionWhenSection3Reached = scrollTop;
+                    allContentWordsDisplayed = false;
+                    section3Instructions.classList.add('visible');
+                }
+
+                if (!allContentWordsDisplayed) {
+                    window.scrollTo(0, scrollPositionWhenSection3Reached);
+                    
+                    if (currentContentWordIndex < contentWords.length) {
+                        contentWords[currentContentWordIndex].classList.add('visible');
+                        currentContentWordIndex++;
+                        
+                        if (currentContentWordIndex >= contentWords.length) {
+                            allContentWordsDisplayed = true;
+                            section3Instructions.classList.remove('visible');
+                        }
+                    }
+                }
+            } else if (scrollTop < section3Top) {
+                isInSection3 = false;
+                currentContentWordIndex = 0;
+                allContentWordsDisplayed = false;
+                contentWords.forEach(word => word.classList.remove('visible'));
+                section3Instructions.classList.remove('visible');
+            }
+        });
+
+        let wordTimer = null;
+        window.addEventListener('wheel', (e) => {
+            if (isInSection3 && !allContentWordsDisplayed && e.deltaY > 0) {
+                e.preventDefault();
+                
+                if (wordTimer) clearTimeout(wordTimer);
+                
+                wordTimer = setTimeout(() => {
+                    const wordsPerScroll = 5;
+                    for (let i = 0; i < wordsPerScroll; i++) {
+                        if (currentContentWordIndex < contentWords.length) {
+                            contentWords[currentContentWordIndex].classList.add('visible');
+                            currentContentWordIndex++;
+                        }
+                    }
+                    
+                    if (currentContentWordIndex >= contentWords.length) {
+                        allContentWordsDisplayed = true;
+                        section3Instructions.classList.remove('visible');
+                    }
+                }, 50);
+            }
+        }, { passive: false });
+        
+        const cursor = document.getElementById('custom-cursor');
+        let lastSparkleTime = 0;
+        
+        document.addEventListener('mousemove', (e) => {
+            cursor.style.left = e.clientX + 'px';
+            cursor.style.top = e.clientY + 'px';
+            
+            const now = Date.now();
+            if (now - lastSparkleTime > 50) {
+                createSparkle(e.clientX, e.clientY);
+                lastSparkleTime = now;
+            }
+        });
+        
+        function createSparkle(x, y) {
+            const sparkle = document.createElement('div');
+            sparkle.className = 'sparkle';
+            sparkle.style.left = x + (Math.random() - 0.5) * 20 + 'px';
+            sparkle.style.top = y + (Math.random() - 0.5) * 20 + 'px';
+            document.body.appendChild(sparkle);
+            
+            setTimeout(() => sparkle.remove(), 800);
+        }
+        
+        const colors = ['#7c9885', '#a67c9c', '#8b7355', '#6b8e9c', '#9c8b7c', '#7c8b9c', '#8b9c7c', '#9c7c8b', '#85a67c', '#7c85a6'];
+        const marqueeText = 'site fait par Heydari Ila';
+        const topContent = document.getElementById('marquee-top-content');
+        const bottomContent = document.getElementById('marquee-bottom-content');
+        
+        for (let i = 0; i < 20; i++) {
+            const spanTop = document.createElement('span');
+            spanTop.className = 'marquee-text';
+            spanTop.textContent = marqueeText;
+            spanTop.style.color = colors[i % colors.length];
+            topContent.appendChild(spanTop);
+            
+            const spanBottom = document.createElement('span');
+            spanBottom.className = 'marquee-text';
+            spanBottom.textContent = marqueeText;
+            spanBottom.style.color = colors[(i + 5) % colors.length];
+            bottomContent.appendChild(spanBottom);
+        }
+        
+        const text1 = "ANDY";
+        const text2 = "WARHOL";
+        const text3 = "SELF";
+        const text4 = "PORTRAIT";
+        const line1 = document.getElementById('line1');
+        const line2 = document.getElementById('line2');
+        const line3 = document.getElementById('line3');
+        const line4 = document.getElementById('line4');
+        
+        text1.split('').forEach(char => {
+            const span = document.createElement('span');
+            span.className = 'letter';
+            span.textContent = char;
+            line1.appendChild(span);
+        });
+        
+        text2.split('').forEach(char => {
+            const span = document.createElement('span');
+            span.className = 'letter';
+            span.textContent = char;
+            line2.appendChild(span);
+        });
+        
+        text3.split('').forEach(char => {
+            const span = document.createElement('span');
+            span.className = 'letter';
+            span.textContent = char;
+            line3.appendChild(span);
+        });
+        
+        text4.split('').forEach(char => {
+            const span = document.createElement('span');
+            span.className = 'letter';
+            span.textContent = char;
+            line4.appendChild(span);
+        });
+        
+        const canvas = document.getElementById('canvas');
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+        
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        camera.position.set(-5.5, 2, 5);
+
+        const cameraGroup = new THREE.Group();
+        cameraGroup.scale.set(0.8, 0.8, 0.8);
+
+        const bodyGeometry = new THREE.BoxGeometry(2, 1.2, 1);
+        const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0x2c2c2c });
+        const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+        body.castShadow = true;
+        cameraGroup.add(body);
+
+        const detailGeometry = new THREE.BoxGeometry(2.02, 0.3, 1.02);
+        const detailMaterial = new THREE.MeshStandardMaterial({ color: 0x000000 });
+        const detail = new THREE.Mesh(detailGeometry, detailMaterial);
+        detail.position.y = 0.45;
+        cameraGroup.add(detail);
+
+        const lensGeometry = new THREE.CylinderGeometry(0.4, 0.4, 0.6, 32);
+        const lensMaterial = new THREE.MeshStandardMaterial({ color: 0x1a1a1a });
+        const lens = new THREE.Mesh(lensGeometry, lensMaterial);
+        lens.rotation.x = Math.PI / 2;
+        lens.position.set(0, -0.1, 0.8);
+        lens.castShadow = true;
+        cameraGroup.add(lens);
+
+        const glassGeometry = new THREE.CylinderGeometry(0.35, 0.35, 0.05, 32);
+        const glassMaterial = new THREE.MeshStandardMaterial({ 
+            color: 0x4a90e2,
+            metalness: 0.9,
+            roughness: 0.1,
+            transparent: true,
+            opacity: 0.8
+        });
+        const glass = new THREE.Mesh(glassGeometry, glassMaterial);
+        glass.rotation.x = Math.PI / 2;
+        glass.position.set(0, -0.1, 1.12);
+        cameraGroup.add(glass);
+
+        const viewfinderGeometry = new THREE.BoxGeometry(0.4, 0.3, 0.3);
+        const viewfinderMaterial = new THREE.MeshStandardMaterial({ color: 0x1a1a1a });
+        const viewfinder = new THREE.Mesh(viewfinderGeometry, viewfinderMaterial);
+        viewfinder.position.set(0.5, 0.75, -0.2);
+        cameraGroup.add(viewfinder);
+
+        const flashGeometry = new THREE.BoxGeometry(0.6, 0.15, 0.2);
+        const flashMaterial = new THREE.MeshStandardMaterial({ color: 0x000000 });
+        const flash = new THREE.Mesh(flashGeometry, flashMaterial);
+        flash.position.set(-0.6, 0.7, 0.1);
+        cameraGroup.add(flash);
+
+        const buttonGeometry = new THREE.CylinderGeometry(0.08, 0.08, 0.1, 16);
+        const buttonMaterial = new THREE.MeshStandardMaterial({ color: 0xe74c3c });
+        const button = new THREE.Mesh(buttonGeometry, buttonMaterial);
+        button.position.set(0.8, 0.65, 0.3);
+        cameraGroup.add(button);
+
+        const dialGeometry = new THREE.CylinderGeometry(0.12, 0.12, 0.08, 16);
+        const dialMaterial = new THREE.MeshStandardMaterial({ color: 0x444444 });
+        const dial = new THREE.Mesh(dialGeometry, dialMaterial);
+        dial.position.set(-0.7, 0.65, 0.3);
+        cameraGroup.add(dial);
+
+        const gripGeometry = new THREE.BoxGeometry(0.6, 0.8, 0.4);
+        const gripMaterial = new THREE.MeshStandardMaterial({ color: 0x1a1a1a });
+        const grip = new THREE.Mesh(gripGeometry, gripMaterial);
+        grip.position.set(0.7, -0.3, 0.2);
+        cameraGroup.add(grip);
+
+        scene.add(cameraGroup);
+
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+        scene.add(ambientLight);
+
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        directionalLight.position.set(5, 5, 5);
+        directionalLight.castShadow = true;
+        scene.add(directionalLight);
+
+        const pointLight = new THREE.PointLight(0x4a90e2, 0.5);
+        pointLight.position.set(-5, 3, 3);
+        scene.add(pointLight);
+
+        const backLight = new THREE.DirectionalLight(0xffffff, 0.3);
+        backLight.position.set(-5, -5, -5);
+        scene.add(backLight);
+
+        let isDragging = false;
+        let previousMousePosition = { x: 0, y: 0 };
+
+        canvas.addEventListener('mousedown', (e) => {
+            isDragging = true;
+            previousMousePosition = { x: e.clientX, y: e.clientY };
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            if (isDragging) {
+                const deltaX = e.clientX - previousMousePosition.x;
+                const deltaY = e.clientY - previousMousePosition.y;
+
+                cameraGroup.rotation.y += deltaX * 0.01;
+                cameraGroup.rotation.x += deltaY * 0.01;
+
+                previousMousePosition = { x: e.clientX, y: e.clientY };
+            }
+        });
+
+        canvas.addEventListener('mouseup', () => {
+            isDragging = false;
+        });
+
+        canvas.addEventListener('mouseleave', () => {
+            isDragging = false;
+        });
+
+        let autoRotate = true;
+        canvas.addEventListener('mouseenter', () => autoRotate = false);
+        canvas.addEventListener('mouseleave', () => autoRotate = true);
+
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            if (autoRotate && !isDragging) {
+                cameraGroup.rotation.y += 0.005;
+            }
+            
+            renderer.render(scene, camera);
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        animate();
+    </script>
+</body>
+</html>

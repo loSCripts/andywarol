@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dégradé Bleu-Violet</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            min-height: 100vh;
+            background: linear-gradient(135deg, #0a1628 0%, #1a2847 25%, #1e3a7a 50%, #2d4a9e 75%, #4a2d7a 100%);
+            overflow: hidden;
+            position: relative;
+        }
+
+        /* Effets de flou visibles */
+        .blur-spot {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(120px);
+        }
+
+        .blur-1 {
+            width: 500px;
+            height: 500px;
+            background: rgba(75, 45, 150, 0.8);
+            top: 10%;
+            right: 15%;
+        }
+
+        .blur-2 {
+            width: 400px;
+            height: 400px;
+            background: rgba(100, 50, 200, 0.7);
+            bottom: 15%;
+            left: 10%;
+        }
+
+        .blur-3 {
+            width: 350px;
+            height: 350px;
+            background: rgba(60, 30, 120, 0.9);
+            top: 50%;
+            left: 40%;
+        }
+
+        .blur-4 {
+            width: 450px;
+            height: 450px;
+            background: rgba(90, 60, 180, 0.6);
+            bottom: 5%;
+            right: 25%;
+        }
+
+        .blur-5 {
+            width: 300px;
+            height: 300px;
+            background: rgba(110, 70, 190, 0.75);
+            top: 20%;
+            left: 5%;
+        }
+    </style>
+</head>
+<body>
+    <div class="blur-spot blur-1"></div>
+    <div class="blur-spot blur-2"></div>
+    <div class="blur-spot blur-3"></div>
+    <div class="blur-spot blur-4"></div>
+    <div class="blur-spot blur-5"></div>
+</body>
+</html>
