@@ -1,0 +1,146 @@
+name: EXEMPLAIRE
+
+# Vérifie le jeu (tests de la physique et du niveau), fabrique l'APK, l'essaie sur un
+# téléphone virtuel, puis la publie sur la page « Releases » du dépôt, prête à installer.
+on:
+  push:
+    paths:
+      - 'exemplaire/**'
+      - '.github/workflows/exemplaire.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: exemplaire-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: exemplaire
+
+jobs:
+  apk:
+    name: Tests et APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Récupérer le code
+        uses: actions/checkout@v4
+
+      - name: Installer Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: exemplaire/package-lock.json
+
+      - name: Tests (physique, niveau accessible, vide infranchissable seul)
+        run: |
+          npm ci
+          npm test
+
+      - name: Construire le jeu
+        run: npm run build
+
+      - name: Installer Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      # Les outils Android sont déjà sur les serveurs de GitHub : on ajoute seulement la version 17.
+      - name: Ajouter Android 17 aux outils Android
+        run: |
+          sdkm="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          [ -x "$sdkm" ] || sdkm=$(ls "$ANDROID_HOME"/cmdline-tools/*/bin/sdkmanager | sort -V | tail -n 1)
+          yes | "$sdkm" --licenses > /dev/null || true
+          "$sdkm" "platforms;android-37.0" "build-tools;36.0.0" > /dev/null
+
+      - name: Installer Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.6.1'
+
+      - name: Fabriquer l'APK
+        env:
+          NUMERO_VERSION: ${{ github.run_number }}
+        run: |
+          gradle -p android assembleRelease --no-daemon
+          cp android/build/outputs/apk/release/exemplaire-release.apk ../exemplaire.apk
+
+      - name: Garder l'APK et le site
+        uses: actions/upload-artifact@v4
+        with:
+          name: apk
+          path: exemplaire.apk
+          retention-days: 7
+
+  essai:
+    name: Essai sur un téléphone virtuel
+    needs: apk
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      - name: Récupérer le code
+        uses: actions/checkout@v4
+
+      - name: Récupérer l'APK
+        uses: actions/download-artifact@v4
+        with:
+          name: apk
+
+      - name: Permettre à l'émulateur d'utiliser la virtualisation
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Lancer le téléphone virtuel et l'essai
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: bash exemplaire/android/essai-emulateur.sh exemplaire.apk
+
+      - name: Garder les captures d'écran
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: captures
+          path: captures/
+          retention-days: 14
+
+  publication:
+    name: Publier dans Releases
+    needs: essai
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      - name: Récupérer l'APK
+        uses: actions/download-artifact@v4
+        with:
+          name: apk
+
+      - name: Créer la release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "exemplaire-${{ github.run_number }}" exemplaire.apk \
+            --repo "${{ github.repository }}" \
+            --target "${{ github.sha }}" \
+            --title "EXEMPLAIRE n° ${{ github.run_number }}" \
+            --latest \
+            --notes "Le jeu EXEMPLAIRE pour Android. Sur le téléphone, touche exemplaire.apk juste en dessous pour la télécharger, puis ouvre le fichier pour l'installer (autorise l'installation depuis le navigateur si Android le demande). Avant d'être publiée, cette version a été essayée sur un téléphone virtuel Android 15 : aucun plantage, aucune erreur JavaScript."

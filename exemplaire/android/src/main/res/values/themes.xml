@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Jaune de l'écran de chargement : pas de flash blanc au démarrage -->
+    <style name="Theme.Exemplaire" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/jaune</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
+    </style>
+    <color name="jaune">#FFFFD23F</color>
+</resources>
