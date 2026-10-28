@@ -235,7 +235,9 @@ export function geoPetiteBoite() {
    (pose figée, cuite en une seule géométrie pour l'instanciation). */
 const ECHELLE = 0.88;
 
-export function construireMannequin(materiau, materiauDetail) {
+/* simple = version allégée pour les centaines de corps instanciés : rotules à
+   8 faces au lieu de 32 (≈ 300 triangles par corps au lieu de 500). */
+export function construireMannequin(materiau, materiauDetail, simple = false) {
   const racine = new THREE.Group();
   const art = {};
   const piece = (parent, geo, x, y, z, mat = materiau) => {
@@ -256,7 +258,7 @@ export function construireMannequin(materiau, materiauDetail) {
     g.translate(0, -l / 2, 0);
     return g;
   };
-  const rotule = (r) => new THREE.OctahedronGeometry(r, 1);
+  const rotule = (r) => new THREE.OctahedronGeometry(r, simple ? 0 : 1);
 
   const echelle = new THREE.Group();
   echelle.scale.setScalar(ECHELLE);
@@ -327,7 +329,7 @@ export function appliquerPose(art, p, f = 1) {
 
 /* Cuisson d'une pose en une géométrie unique, pieds à y = 0, centrée en x/z. */
 export function geoPose(indice) {
-  const { racine, art } = construireMannequin(null, 'detail');
+  const { racine, art } = construireMannequin(null, 'detail', true);
   appliquerPose(art, POSES_DEF[indice], 1);
   racine.updateMatrixWorld(true);
   const morceaux = [];

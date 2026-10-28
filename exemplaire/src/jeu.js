@@ -16,7 +16,7 @@ import {
 import { materiauEncre, communs } from './rendu.js';
 
 const S_NAISSANCE = 1.5;
-const FENETRE_STATUES = 38; // ne dessiner que les corps à ± 38 m de la caméra
+const FENETRE_STATUES = 24; // ne dessiner que les corps à ± 24 m de la caméra (on en voit ± 14)
 
 function hashId(id) {
   let h = 2166136261;
