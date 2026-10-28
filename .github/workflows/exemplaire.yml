@@ -70,12 +70,13 @@ jobs:
           gradle -p android assembleRelease --no-daemon
           cp android/build/outputs/apk/release/exemplaire-release.apk ../exemplaire.apk
 
-      - name: Garder l'APK et le site
+      - name: Garder l'APK
         uses: actions/upload-artifact@v4
         with:
           name: apk
           path: exemplaire.apk
           retention-days: 7
+
 
   essai:
     name: Essai sur un téléphone virtuel

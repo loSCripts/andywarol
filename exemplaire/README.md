@@ -26,7 +26,7 @@ Le rendu imite la **sérigraphie pop art** : quatre encres par image, trame de p
 
 ## Où le trouver
 
-- **Site** : voir plus bas « Le site ».
+- **Site** : https://loscripts.github.io/andywarol/jeu/ (en ligne dès que cette branche est fusionnée dans `main`, voir « Le site »).
 - **APK Android** : page « Releases » du dépôt (`exemplaire-N`), fabriquée et essayée sur un téléphone virtuel par GitHub Actions (`.github/workflows/exemplaire.yml`). Toucher `exemplaire.apk`, puis ouvrir le fichier pour l'installer. Elle fonctionne aussi sans réseau (tes corps ne servent alors qu'à toi).
 
 ## Comment c'est fait
@@ -62,7 +62,9 @@ Le jeu tourne chez le joueur : on ne peut pas tout prouver côté serveur. Les v
 
 ## Le site
 
-Hébergé sur Vercel, construit depuis ce dossier (`npm run build`, sortie `dist/`). Il s'installe comme une appli (manifeste + service worker) et marche hors ligne une fois chargé.
+Le dépôt publie déjà sa branche `main` sur GitHub Pages. Le jeu construit est rangé dans le dossier `jeu/` à la racine du dépôt : une fois cette branche fusionnée dans `main`, il est en ligne à **https://loscripts.github.io/andywarol/jeu/**. Il s'installe comme une appli (manifeste + service worker) et marche hors ligne une fois chargé.
+
+Après une modification du jeu : `npm run site` (reconstruit `../jeu`), puis on enregistre le dossier `jeu/` avec le reste.
 
 ## Construire soi-même
 
@@ -70,7 +72,8 @@ Hébergé sur Vercel, construit depuis ce dossier (`npm run build`, sortie `dist
 cd exemplaire
 npm ci
 npm test            # physique et niveau : accessible avec les corps, infranchissable sans
-npm run build       # le site dans dist/
+npm run build       # le site dans dist/ (l'APK l'embarque)
+npm run site        # le site dans ../jeu/ (publié par GitHub Pages)
 npm run dev         # pour développer
 
 # APK (Java 17, SDK Android avec la plateforme 37, Gradle 9.6.1)

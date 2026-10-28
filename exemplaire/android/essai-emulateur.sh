@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Essai automatique d'EXEMPLAIRE sur un émulateur Android (lancé par GitHub Actions).
 # On lance l'appli, on touche « PRODUIRE UN EXEMPLAIRE », on signe le contrat, on saute,
-# on s'imprime, et on vérifie qu'il n'y a eu ni plantage ni erreur JavaScript.
+# on s'imprime, hors ligne, et on vérifie qu'il n'y a eu ni plantage ni erreur JavaScript.
 # Des captures d'écran sont gardées dans captures/.
 # Usage : bash essai-emulateur.sh exemplaire.apk
 set -euo pipefail
@@ -40,6 +40,10 @@ toucher() {
 }
 
 adb install -r "$APK"
+# Sans réseau : l'essai ne doit pas poser de faux corps sur le vrai serveur,
+# et il vérifie au passage que le jeu marche hors ligne.
+adb shell svc wifi disable || true
+adb shell svc data disable || true
 adb logcat -G 16M || true
 adb logcat -c
 adb shell am start -W -n $P/.Ecran

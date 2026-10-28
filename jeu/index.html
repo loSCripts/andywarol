@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#16121a">
+  <meta name="description" content="Tu es un exemplaire. La soupe monte. Ton corps sera la marche du suivant.">
+  <title>EXEMPLAIRE</title>
+  <link rel="icon" href="./icone.svg" type="image/svg+xml">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <script type="module" crossorigin src="./assets/index-ESn18QnK.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/index-OXcqXG1a.css">
+</head>
+<body>
+  <canvas id="toile" aria-label="Le jeu"></canvas>
+  <svg id="elastique" aria-hidden="true"><line id="el-ligne" /><circle id="el-depart" r="10" /><circle id="el-doigt" r="16" /></svg>
+
+  <div id="chargement">
+    <div class="titre-geant" data-texte="EXEMPLAIRE">EXEMPLAIRE</div>
+    <p>Mise sous presse…</p>
+  </div>
+
+  <!-- Pendant la partie -->
+  <div id="hud" hidden>
+    <div id="numero" class="tampon">N° —</div>
+    <div id="altitude"><b id="hauteur">0</b><span>M</span><small id="zone">LA CHAÎNE</small></div>
+    <div id="bandeau"><div id="bandeau-texte">LA PLACE EST LIBRE</div></div>
+    <div id="jauge"><div id="jauge-soupe"></div><span id="jauge-txt">SOUPE</span></div>
+    <button id="btn-imprimer" type="button"><b>IMPRIMER</b><small id="imprimer-aide"></small></button>
+    <button id="btn-pause" type="button" aria-label="Pause">❚❚</button>
+    <div id="consigne" hidden></div>
+  </div>
+
+  <!-- Écran titre -->
+  <section id="ecran-titre" class="ecran" hidden>
+    <div class="titre-geant" data-texte="EXEMPLAIRE">EXEMPLAIRE</div>
+    <p class="accroche">Ton corps est la marche du suivant.</p>
+    <p id="stats" class="tampon-large">— PRODUITS · — DEBOUT · — SORTIS</p>
+    <p id="titre-celebre" class="celebre"></p>
+    <button id="btn-jouer" class="gros-bouton" type="button">PRODUIRE UN EXEMPLAIRE</button>
+    <nav class="petits-boutons">
+      <button id="btn-galerie" type="button">GALERIE</button>
+      <button id="btn-contrat" type="button">CONTRAT</button>
+      <button id="btn-son" type="button">SON : OUI</button>
+    </nav>
+    <p id="hors-ligne" class="hors-ligne" hidden>HORS LIGNE — tes corps ne serviront qu'à toi</p>
+  </section>
+
+  <!-- Contrat -->
+  <section id="ecran-contrat" class="ecran" hidden>
+    <article class="papier contrat">
+      <h2>CONTRAT D'EXEMPLAIRE</h2>
+      <ol>
+        <li><b>Tu es remplaçable.</b> Dès que tu tombes, la presse en sort un autre. Il te ressemblera.</li>
+        <li><b>La soupe monte.</b> Elle ne fait pas d'exception.</li>
+        <li><b>Ton corps appartient à la boîte.</b> Imprimé, il reste debout 48 heures et sert de marche aux suivants. Ensuite, recyclage.</li>
+        <li><b>Au-delà du Vide, personne ne monte seul.</b> On n'y passe que sur les corps des autres.</li>
+        <li><b>Un corps peut être acheté.</b> Chaque achat le garde exposé 12 heures de plus. On ne s'achète pas soi-même.</li>
+        <li><b>Qui sort de la boîte sera célèbre.</b> Quinze minutes. Chacun son tour.</li>
+      </ol>
+      <label class="signature">Signature
+        <input id="pseudo" maxlength="16" autocomplete="nickname" spellcheck="false" placeholder="ton nom (ou rien)">
+      </label>
+      <button id="btn-signer" class="gros-bouton" type="button">SIGNER</button>
+    </article>
+  </section>
+
+  <!-- Imprimé -->
+  <section id="ecran-imprime" class="ecran bas" hidden>
+    <article class="papier etiquette-musee">
+      <h3 id="im-numero">EXEMPLAIRE N° —</h3>
+      <p id="im-detail"></p>
+      <p class="mot">Dernier mot : <q id="im-mot"></q></p>
+      <div id="im-mots" class="choix-mots" aria-label="Choisir ton dernier mot"></div>
+      <p id="im-note" class="note"></p>
+    </article>
+    <button id="btn-suivant-im" class="gros-bouton noir" type="button">SUIVANT</button>
+  </section>
+
+  <!-- Recyclé -->
+  <section id="ecran-recycle" class="ecran rouge" hidden>
+    <div class="titre-geant" data-texte="RECYCLÉ">RECYCLÉ</div>
+    <p id="re-detail" class="accroche"></p>
+    <p class="accroche petit">Il n'a servi à rien. La soupe, elle, est meilleure.</p>
+    <button id="btn-suivant-re" class="gros-bouton noir" type="button">SUIVANT</button>
+  </section>
+
+  <!-- Gloire -->
+  <section id="ecran-gloire" class="ecran bas" hidden>
+    <div class="titre-geant" data-texte="CÉLÈBRE">CÉLÈBRE</div>
+    <p id="gl-detail" class="accroche"></p>
+    <p id="gl-compte" class="compte"></p>
+    <button id="btn-suivant-gl" class="gros-bouton noir" type="button">SUIVANT</button>
+  </section>
+
+  <!-- Galerie -->
+  <section id="ecran-galerie" class="ecran" hidden>
+    <h2 class="titre-moyen">GALERIE</h2>
+    <p class="accroche petit">Les corps qui valent le plus. Les autres sont déjà dans la soupe.</p>
+    <ol id="ga-liste" class="galerie"></ol>
+    <button id="btn-retour-ga" class="gros-bouton noir" type="button">RETOUR</button>
+  </section>
+
+  <!-- Pause -->
+  <section id="ecran-pause" class="ecran" hidden>
+    <div class="titre-geant" data-texte="PAUSE">PAUSE</div>
+    <p class="accroche petit">La soupe, elle, n'attend pas. (Si, là, elle attend.)</p>
+    <button id="btn-reprendre" class="gros-bouton" type="button">REPRENDRE</button>
+    <nav class="petits-boutons">
+      <button id="btn-abandon" type="button">ABANDONNER</button>
+      <button id="btn-son2" type="button">SON</button>
+    </nav>
+  </section>
+
+  <!-- Étiquette d'un corps touché du doigt -->
+  <aside id="etiquette" class="papier etiquette-musee flottante" hidden>
+    <button id="et-fermer" class="fermer" type="button" aria-label="Fermer">×</button>
+    <h3 id="et-numero"></h3>
+    <p id="et-detail"></p>
+    <p class="mot">Dernier mot : <q id="et-mot"></q></p>
+    <p id="et-prix" class="note"></p>
+    <button id="et-acheter" class="gros-bouton petit" type="button">ACHETER</button>
+  </aside>
+
+</body>
+</html>
