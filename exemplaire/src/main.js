@@ -54,8 +54,8 @@ const jeu = new Jeu(imp, son, {
     if (!premierSaut) { premierSaut = true; ecrire('premierSaut', true); consigne(null); }
   },
   planche: () => finDePlanche(),
-  recycle: (hMax) => reseau.recycler(numero, hMax),
-  gloire: async (duree) => { gloireInfo = await reseau.gloire(numero, duree); },
+  recycle: (hMax) => { finDePartie(); reseau.recycler(numero, hMax); },
+  gloire: async (duree) => { finDePartie(); gloireInfo = await reseau.gloire(numero, duree); },
 });
 window.__exemplaire = { jeu, imp, reseau };
 
@@ -99,6 +99,8 @@ async function rafraichirStatues() {
 /* ------------------------------------------------------------- Parties */
 
 function demarrerPartie() {
+  const precedent = jeu.mort?.type === 'imprime' ? jeu.mort.statue : null;
+  clearTimeout(filetFin);
   son.debloquer();
   son.demarrerAmbiance();
   pause = false;
@@ -115,6 +117,7 @@ function demarrerPartie() {
   });
   if (Date.now() - derniereMajStatues > 45000) rafraichirStatues();
   if (!premierSaut) consigne('TIRE VERS L\'ARRIÈRE,<br>LÂCHE : TU SAUTES.');
+  else if (precedent) consigne(`TON CORPS PRÉCÉDENT EST FIGÉ À ${Math.max(0, Math.round(precedent.y))} M.<br>MONTE DESSUS.`, 5000);
   else consigne(null);
 }
 
@@ -128,14 +131,30 @@ function consigne(html, duree = 0) {
   if (duree) minuteurConsigne = setTimeout(() => { c.hidden = true; }, duree);
 }
 
-async function imprimer() {
+function imprimer() {
   if (jeu.etat !== 'jeu' || pause) return;
-  const st = await jeu.imprimerCorps();
+  const st = jeu.imprimerCorps();
   if (!st) return;
   derniere = st;
   jeu.poserStatue(st);
-  const serveur = await reseau.imprimer(numero, st);
-  Object.assign(st, serveur);
+  finDePartie();
+  reseau.imprimer(numero, st).then((serveur) => Object.assign(st, serveur));
+}
+
+/* Pendant l'animation de fin, plus de bouton à toucher : seulement l'écran,
+   pour passer directement à la suite. Dernier filet : si l'animation 3D ne
+   va pas au bout (quelle qu'en soit la raison), l'écran suivant vient quand même. */
+let filetFin = null;
+function finDePartie() {
+  clearTimeout(filetFin);
+  filetFin = setTimeout(() => {
+    try { jeu.passerFin(); } catch (e) { console.error(e); retourTitre(); }
+  }, 6000);
+  $('hud').hidden = true;
+  $('etiquette').hidden = true;
+  consigne(null);
+  elast.classList.remove('actif');
+  toucher = null;
 }
 
 function finDePlanche() {
@@ -149,7 +168,8 @@ function finDePlanche() {
 }
 
 function afficherImprime() {
-  const st = derniere;
+  const st = jeu.mort?.statue || derniere;
+  if (!st) { montrer('ecran-titre'); return; }
   $('im-numero').textContent = `EXEMPLAIRE ${numeroTexte(numero)}`;
   const batt = st.batterie != null ? ` Batterie : ${st.batterie} %.` : '';
   $('im-detail').textContent = `${(lire('pseudo', '') || 'ANONYME').toUpperCase()}. Imprimé à ${st.y.toFixed(1).replace('.', ',')} m, à ${pad(st.heure)} h ${pad(st.minute)}.${batt}`;
@@ -172,8 +192,8 @@ function afficherImprime() {
     choix.appendChild(b);
   }
   $('im-note').textContent = reseau.enLigne && !st.local
-    ? `Ton corps reste debout ${VIE_STATUE_H} heures pour tout le monde. Ensuite, recyclage — sauf si quelqu'un l'achète.`
-    : 'Hors ligne : ton corps ne sert qu\'à toi.';
+    ? `Ton corps reste figé ici ${VIE_STATUE_H} heures, pour tous les joueurs : c'est une marche, le suivant pourra monter dessus. Ensuite, recyclage — sauf si quelqu'un l'achète.`
+    : 'Ton corps reste figé ici : c\'est une marche, le suivant pourra monter dessus. Hors ligne, il ne sert qu\'à toi.';
   montrer('ecran-imprime');
 }
 
@@ -267,6 +287,8 @@ let toucher = null;
 
 toile.addEventListener('pointerdown', (e) => {
   son.debloquer();
+  // Pendant une fin, toucher l'écran passe l'animation (pas tout de suite : évite un double toucher)
+  if (jeu.mort && !jeu.mort.fini) { if (jeu.mort.t > 0.4) jeu.passerFin(); return; }
   if (jeu.etat !== 'jeu' || pause || toucher) return;
   toucher = { id: e.pointerId, x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY, t0: performance.now() };
   toile.setPointerCapture(e.pointerId);
@@ -327,6 +349,7 @@ function reprendre() {
 }
 
 function retourTitre() {
+  clearTimeout(filetFin);
   pause = false;
   jeu.etat = 'titre';
   jeu.mort = null;
@@ -456,22 +479,75 @@ function majHud() {
 
 let dernier = performance.now();
 function boucle(t) {
+  // La prochaine image est demandée d'abord : une erreur ne peut plus arrêter le jeu
+  requestAnimationFrame(boucle);
   const brut = t - dernier;
   dernier = t;
-  if (!pause) {
-    jeu.maj(Math.min(0.05, brut / 1000));
-    jeu.dessiner();
-    majHud();
+  try {
+    if (!pause) {
+      jeu.maj(Math.min(0.05, brut / 1000));
+      jeu.dessiner();
+      majHud();
+    }
+    imp.ajuster(brut, t);
+  } catch (e) {
+    console.error(e);
   }
-  imp.ajuster(brut, t);
-  requestAnimationFrame(boucle);
+}
+
+/* ------------------------------------------------------------- Essai */
+
+/* Mode essai (?essai=1), lancé par l'essai automatique sur téléphone virtuel :
+   une séquence complète jouée avec les vraies fonctions du jeu, sans réseau.
+   Chaque étape attend son écran ; le résultat part dans la console, que
+   l'appli recopie dans le journal Android. */
+async function essaiAutomatique() {
+  const attendre = (ms) => new Promise((r) => setTimeout(r, ms));
+  const attendreQue = async (cond, ms, quoi) => {
+    const t0 = Date.now();
+    while (!cond()) {
+      if (Date.now() - t0 > ms) throw new Error(`délai dépassé : ${quoi}`);
+      await attendre(100);
+    }
+  };
+  const ok = (m) => console.info(`[essai] ${m}`);
+  try {
+    ecrire('pseudo', 'ESSAI');
+    for (let i = 1; i <= 3; i++) {
+      demarrerPartie();
+      await attendreQue(() => jeu.etat === 'jeu' && !$('hud').hidden, 4000, `partie ${i} lancée`);
+      await attendre(1500);
+      // la première fois en plein saut, ensuite debout
+      if (i === 1) { jeu.viser(-30, 90); jeu.lacher(); await attendre(250); }
+      imprimer();
+      await attendreQue(() => !$('ecran-imprime').hidden, 10000, `écran « imprimé » n° ${i}`);
+      ok(`impression ${i} : écran « imprimé » affiché, bouton SUIVANT présent`);
+      await attendre(600);
+    }
+    demarrerPartie();
+    await attendre(1200);
+    jeu.soupe = jeu.j.y + 1;
+    await attendreQue(() => !$('ecran-recycle').hidden, 10000, 'écran « recyclé »');
+    ok('noyade : écran « recyclé » affiché');
+    demarrerPartie();
+    const h0 = jeu.horloge;
+    await attendre(1500);
+    if (!(jeu.horloge > h0) || jeu.etat !== 'jeu') throw new Error('la boucle du jeu est arrêtée');
+    if (jeu.statues.filter((s) => s.mien).length < 3) throw new Error('corps imprimés absents du monde');
+    ok('ESSAI OK');
+  } catch (e) {
+    console.error(`[essai] ESSAI ÉCHEC : ${e.message}`);
+  }
 }
 
 $('chargement').hidden = true;
 montrer('ecran-titre');
+const modeEssai = new URLSearchParams(location.search).has('essai');
+if (modeEssai) reseau.coupe = true;
 afficherEtat();
 rafraichirEtat();
 rafraichirStatues();
+if (modeEssai) essaiAutomatique();
 setInterval(() => { if (!document.hidden) rafraichirEtat(); }, 30000);
 requestAnimationFrame(boucle);
 

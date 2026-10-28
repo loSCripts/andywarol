@@ -31,6 +31,7 @@ export const appareil = lire('appareil', null) || (() => { const id = uuid(); ec
 export class ErreurServeur extends Error {}
 
 async function rpc(nom, args = {}, delai = 8000) {
+  if (reseau.coupe) throw new Error('hors_ligne');
   const ctrl = new AbortController();
   const minuteur = setTimeout(() => ctrl.abort(), delai);
   try {
@@ -61,6 +62,7 @@ function mesCorps() {
 
 export const reseau = {
   enLigne: navigator.onLine !== false,
+  coupe: false,                // mode essai : aucun échange avec le vrai serveur
 
   async etat() {
     try {
@@ -135,6 +137,7 @@ export const reseau = {
     let liste;
     try {
       liste = await rpc('statues_vivantes', { p_limite: 900 }, 12000);
+      if (!Array.isArray(liste)) throw new Error('reponse_invalide');
       ecrire('statues', liste);
     } catch {
       liste = lire('statues', []).filter((c) => Date.parse(c.expire_le) > Date.now());

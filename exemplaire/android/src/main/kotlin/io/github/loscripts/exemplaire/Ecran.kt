@@ -2,8 +2,11 @@ package io.github.loscripts.exemplaire
 
 import android.annotation.SuppressLint
 import android.os.Bundle
+import android.util.Log
 import android.view.WindowManager
+import android.webkit.ConsoleMessage
 import android.webkit.RenderProcessGoneDetail
+import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
@@ -59,6 +62,14 @@ class Ecran : ComponentActivity() {
                 return true
             }
         }
+        // La console du jeu va dans le journal Android (étiquette « Exemplaire ») :
+        // c'est là que l'essai automatique lit ses résultats et les erreurs JavaScript.
+        vue.webChromeClient = object : WebChromeClient() {
+            override fun onConsoleMessage(m: ConsoleMessage): Boolean {
+                Log.i("Exemplaire", "${m.messageLevel()} ${m.message()} [${m.sourceId().substringAfterLast('/')}:${m.lineNumber()}]")
+                return true
+            }
+        }
         setContentView(vue)
         pleinEcran()
 
@@ -72,7 +83,9 @@ class Ecran : ComponentActivity() {
             }
         })
 
-        if (etat == null) vue.loadUrl("https://$HOTE/assets/index.html") else vue.restoreState(etat)
+        // --ez essai true (essai automatique) : le jeu joue tout seul, sans réseau
+        val essai = if (intent.getBooleanExtra("essai", false)) "?essai=1" else ""
+        if (etat == null) vue.loadUrl("https://$HOTE/assets/index.html$essai") else vue.restoreState(etat)
     }
 
     private fun pleinEcran() {

@@ -43,11 +43,26 @@ export class Jeu {
     this.camAngle = S_NAISSANCE / R;
     this.camY = 3;
     this.visee = null;
+    this.batterie = null;
+    this.suivreBatterie();
     this.construireDecor();
     this.construireJoueur();
     this.ajouterStatues(this.niveau.fondateurs.map((f) => ({ ...f })));
     this.nouvellePartie(false);
     this.etat = 'titre';
+  }
+
+  /* Le niveau de batterie est lu d'avance et suivi : au moment de
+     s'imprimer, on ne doit rien attendre (sur un vrai téléphone, la réponse
+     arrive plusieurs images plus tard). */
+  suivreBatterie() {
+    try {
+      navigator.getBattery?.().then((b) => {
+        const maj = () => { this.batterie = Math.round(b.level * 100); };
+        maj();
+        b.addEventListener?.('levelchange', maj);
+      }).catch(() => {});
+    } catch { /* pas d'accès à la batterie */ }
   }
 
   /* ------------------------------------------------------------ Décor */
@@ -291,23 +306,23 @@ export class Jeu {
     return { utile: false, texte: 'TROP HAUT' };
   }
 
-  async imprimerCorps() {
+  /* Synchrone exprès : l'état « imprimé » et la fiche de la mort doivent
+     exister dans la même image, sinon la boucle de fin tourne sans fiche. */
+  imprimerCorps() {
     if (this.etat !== 'jeu') return null;
     const j = this.j;
-    this.etat = 'imprime';
     this.annulerVisee();
     const date = new Date();
-    let batterie = null;
-    try { batterie = navigator.getBattery ? Math.round((await navigator.getBattery()).level * 100) : null; } catch { /* rien */ }
     const pose = this.poseCourante();
     appliquerPose(this.art, POSES_DEF[pose], 1);
     const st = {
       s: j.s, y: j.y, pose, face: j.face,
       mot: MOTS[Math.floor(Math.random() * MOTS.length)],
-      heure: date.getHours(), minute: date.getMinutes(), batterie,
+      heure: date.getHours(), minute: date.getMinutes(), batterie: this.batterie,
       pseudo: this.rappels.pseudo?.() || 'ANONYME', mien: true, achats: 0,
     };
     this.mort = { type: 'imprime', t: 0, statue: st };
+    this.etat = 'imprime';
     Object.assign(this.effets, { flash: 1, grille: 0, revele: 1 });
     this.son.jouer('imprimer');
     navigator.vibrate?.([40, 60, 120]);
@@ -502,7 +517,10 @@ export class Jeu {
 
   majFin(dt) {
     const mo = this.mort;
+    if (!mo) { this.etat = 'titre'; return; }
     mo.t += dt;
+    // Filet de sécurité : quoi qu'il arrive, l'écran suivant apparaît
+    if (mo.t > 4.5 && !mo.fini) this.passerFin();
     this.imp.placerPlanche(0.05, 0.47, 0.95, 0.975);
     const e = this.effets;
     if (mo.type === 'imprime') {
@@ -536,6 +554,20 @@ export class Jeu {
       if (mo.t > 1.2 && !mo.fini) { mo.fini = true; this.rappels.planche?.(); }
     }
     this.son.battre(0, false);
+  }
+
+  /* Toucher l'écran pendant l'animation de fin : on passe directement à la planche. */
+  passerFin() {
+    const mo = this.mort;
+    if (!mo || mo.fini) return;
+    mo.fini = true;
+    mo.t = Math.max(mo.t, 2);
+    if (mo.type === 'imprime') {
+      Object.assign(this.effets, { grille: 1, revele: 1, flash: 0 });
+      this.effets.decal.set(1.2, -0.9);
+    }
+    if (mo.type === 'recycle') this.effets.rouge = 0.85;
+    this.rappels.planche?.();
   }
 
   majEffetsVisuels(dt) {
