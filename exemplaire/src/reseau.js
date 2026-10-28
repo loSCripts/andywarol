@@ -54,17 +54,43 @@ async function rpc(nom, args = {}, delai = 8000) {
   }
 }
 
-/* Mes corps : gardés localement pour les reconnaître (et les voir hors ligne). */
+/* Mes corps, gardés sur le téléphone : une liste par mode, pour que rien ne
+   passe de l'un à l'autre. En ligne, ils servent à les reconnaître parmi ceux
+   de tout le monde ; en mode seul, ce sont les seuls corps du monde. */
+const cleCorps = () => (reseau.seul ? 'corpsSeul' : 'mesCorps');
+
 function mesCorps() {
   const maintenant = Date.now();
-  return lire('mesCorps', []).filter((c) => Date.parse(c.expire_le) > maintenant);
+  return lire(cleCorps(), []).filter((c) => Date.parse(c.expire_le) > maintenant);
+}
+
+function compterSeul(champ) {
+  const s = lire('statsSeul', { recycles: 0, sortis: 0 });
+  s[champ] = (s[champ] || 0) + 1;
+  ecrire('statsSeul', s);
 }
 
 export const reseau = {
   enLigne: navigator.onLine !== false,
   coupe: false,                // mode essai : aucun échange avec le vrai serveur
 
+  /* 'en-ligne' : monde partagé, les corps passent par le serveur.
+     'seul' : aucun échange, les corps restent sur ce téléphone. */
+  mode: lire('mode', 'en-ligne') === 'seul' ? 'seul' : 'en-ligne',
+  get seul() { return this.mode === 'seul'; },
+  choisirMode(m) {
+    this.mode = m === 'seul' ? 'seul' : 'en-ligne';
+    ecrire('mode', this.mode);
+  },
+
+  /* Le registre du mode seul, tenu sur le téléphone. */
+  etatSeul() {
+    const s = lire('statsSeul', { recycles: 0, sortis: 0 });
+    return { produits: lire('compteurSeul', 0), debout: mesCorps().length, recycles: s.recycles || 0, sortis: s.sortis || 0 };
+  },
+
   async etat() {
+    if (this.seul) return lire('etat', null);   // mode seul : pas un seul échange
     try {
       const e = await rpc('etat');
       ecrire('etat', e);
@@ -73,6 +99,11 @@ export const reseau = {
   },
 
   async nouvelExemplaire(pseudo) {
+    if (this.seul) {
+      const n = lire('compteurSeul', 0) + 1;
+      ecrire('compteurSeul', n);
+      return n;
+    }
     try {
       return (await rpc('nouvel_exemplaire', { p_appareil: appareil, p_pseudo: pseudo })).numero;
     } catch { return null; }
@@ -88,7 +119,7 @@ export const reseau = {
       expire_le: new Date(Date.now() + VIE_STATUE_H * 3600e3).toISOString(),
     };
     let st = local;
-    if (numero) {
+    if (numero && !this.seul) {
       try {
         st = await rpc('imprimer', {
           p_appareil: appareil, p_numero: numero, p_s: c.s, p_y: c.y, p_pose: c.pose, p_face: c.face,
@@ -97,25 +128,27 @@ export const reseau = {
       } catch { /* garde la version locale */ }
     }
     st.mien = true;
-    ecrire('mesCorps', [...mesCorps(), st]);
+    ecrire(cleCorps(), [...mesCorps(), st]);
     return st;
   },
 
   async signer(st, mot) {
     st.mot = mot;
     const liste = mesCorps().map((c) => (c.id === st.id ? { ...c, mot } : c));
-    ecrire('mesCorps', liste);
+    ecrire(cleCorps(), liste);
     if (st.local) return;
     try { await rpc('signer', { p_appareil: appareil, p_id: st.id, p_mot: mot }); } catch { /* tant pis */ }
   },
 
   async recycler(numero, hauteur) {
+    if (this.seul) { compterSeul('recycles'); return; }
     if (!numero) return;
     try { await rpc('recycler', { p_appareil: appareil, p_numero: numero, p_hauteur: hauteur }); } catch { /* rien */ }
   },
 
   /* Achat : renvoie la statue mise à jour, ou un code d'erreur lisible. */
   async acheter(id) {
+    if (this.seul) return { erreur: 'seul' };
     try {
       const st = await rpc('acheter', { p_appareil: appareil, p_id: id });
       ecrire('achats', [...lire('achats', []), id]);
@@ -126,14 +159,17 @@ export const reseau = {
   },
 
   async gloire(numero, duree) {
+    if (this.seul) { compterSeul('sortis'); return { erreur: 'seul' }; }
     if (!numero) return { erreur: 'hors_ligne' };
     try { return await rpc('revendiquer_gloire', { p_appareil: appareil, p_numero: numero, p_duree: duree }); } catch (e) {
       return { erreur: e instanceof ErreurServeur ? e.message : 'hors_ligne' };
     }
   },
 
-  /* Les corps de tout le monde (+ les miens restés locaux). */
+  /* En ligne : les corps de tout le monde (+ les miens restés locaux).
+     Seul : uniquement mes corps du mode seul. */
   async statues() {
+    if (this.seul) return mesCorps().map((c) => ({ ...c, mien: true }));
     let liste;
     try {
       liste = await rpc('statues_vivantes', { p_limite: 900 }, 12000);

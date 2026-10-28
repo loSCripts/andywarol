@@ -207,7 +207,11 @@ export function genererNiveau(graine = GRAINE) {
     f.id = `f${i + 1}`;
   });
 
+  // Point de départ : la corniche fixe la plus basse (la presse est à sa droite)
+  const depart = corniches.filter((c) => c.type === 'fixe').reduce((a, b) => (b.y < a.y ? b : a));
+
   // Inscriptions sur la paroi
+  textes.push({ texte: 'LA CHAÎNE', s: depart.s + depart.l / 2 - 1.4, y: depart.y + 4.2, h: 1.2, fort: true });
   const pres = (y) => chemin.concat(vide).reduce((m, c) => (Math.abs(c.y - y) < Math.abs(m.y - y) ? c : m));
   for (let h = 10; h <= 140; h += 10) {
     const c = pres(h);
@@ -217,7 +221,6 @@ export function genererNiveau(graine = GRAINE) {
     const c = pres(y);
     textes.push({ texte, s: c.s + c.l / 2 + dec, y: c.y + 2.6 + h * 0.5, h, fort: true });
   };
-  panneau('LA CHAÎNE', 4, 1.6, 8);
   panneau('MOURIR UTILEMENT EST UN DEVOIR', 22, 0.8);
   panneau("L'ATELIER", 41, 1.6);
   panneau('ÉDITION ILLIMITÉE', 63, 0.9);
@@ -229,5 +232,5 @@ export function genererNiveau(graine = GRAINE) {
   // L'étiquette de la boîte, vue de l'intérieur : à l'envers, en filigrane
   textes.push({ texte: 'SOUPE  CONCENTRÉE', s: 0, y: 72, h: 9, fort: false, miroir: true, tour: true });
 
-  return { corniches, chemin, vide, fondateurs, deco, textes, yVide, p0 };
+  return { corniches, chemin, vide, fondateurs, deco, textes, yVide, p0, depart };
 }

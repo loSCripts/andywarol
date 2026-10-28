@@ -155,8 +155,9 @@ export function geoDecorBoite(alea) {
   return fusion(m);
 }
 
-/* LA MATRICE : la presse qui produit les exemplaires, au pied de la boîte. */
-export function geoMatrice(s) {
+/* LA MATRICE : la presse qui produit les exemplaires, au pied de la boîte.
+   sens = −1 : le tapis part vers les s décroissants. */
+export function geoMatrice(s, sens = 1) {
   const a = s / R;
   const m = [];
   const bloc = (w, h, d, x, y, z, encre) => {
@@ -183,6 +184,7 @@ export function geoMatrice(s) {
     m.push(rouleau);
   }
   const g = fusion(m);
+  if (sens < 0) g.scale(1, 1, -1);
   g.rotateY(-a);
   return g;
 }

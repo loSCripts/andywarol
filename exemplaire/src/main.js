@@ -21,7 +21,11 @@ function montrer(id) {
 
 const nombre = (n) => new Intl.NumberFormat('fr-FR').format(n);
 const pad = (n, k = 2) => String(n).padStart(k, '0');
-const numeroTexte = (n) => (n ? `N° ${String(n).padStart(6, '0').replace(/(\d{3})(\d{3})$/, '$1 $2')}` : 'N° ? — HORS LIGNE');
+const numeroTexte = (n) => {
+  if (!n) return 'N° ? — HORS LIGNE';
+  const t = `N° ${String(n).padStart(6, '0').replace(/(\d{3})(\d{3})$/, '$1 $2')}`;
+  return reseau.seul ? `${t} · SEUL` : t;
+};
 
 async function attendrePolices() {
   try {
@@ -47,6 +51,8 @@ let pause = false;
 let premierSaut = lire('premierSaut', false);
 let derniereMajStatues = 0;
 let statuesEnAttente = null;
+let generationStatues = 0;    // pour ignorer une réponse arrivée après un changement de mode
+let modeCharge = null;        // mode des corps actuellement dans le monde
 
 const jeu = new Jeu(imp, son, {
   pseudo: () => lire('pseudo', '') || 'ANONYME',
@@ -86,14 +92,36 @@ function afficherEtat() {
   }
   $('bandeau-texte').textContent = `${bandeau}   ·   ${nombre(e.debout)} CORPS DEBOUT   ·   ${nombre(e.produits)} EXEMPLAIRES PRODUITS`;
   jeu.ecrireGloire(c);
+  if (reseau.seul) afficherEtatSeul();
+}
+
+/* Mode seul : le bandeau et le haut de la boîte parlent du monde de ce téléphone. */
+function afficherEtatSeul() {
+  const s = reseau.etatSeul();
+  $('bandeau-texte').textContent = `MODE SEUL · TES CORPS NE SERVENT QU'À TOI · ${nombre(s.debout)} CORPS DEBOUT · ${nombre(s.produits)} EXEMPLAIRES PRODUITS · ${nombre(s.recycles)} RECYCLÉS · PERSONNE NE TE REGARDE`;
+  jeu.ecrireGloire('★ PERSONNE NE TE REGARDE ★');
 }
 
 async function rafraichirStatues() {
   derniereMajStatues = Date.now();
+  const generation = ++generationStatues;
+  const mode = reseau.mode;
   const liste = await reseau.statues();
+  if (generation !== generationStatues || mode !== reseau.mode) return;
+  modeCharge = mode;
   // Ne pas changer le monde sous les pieds de quelqu'un qui grimpe
   if (jeu.etat === 'jeu' && jeu.j.y > 18) statuesEnAttente = liste;
   else jeu.remplacerStatues(liste);
+}
+
+/* Changer de mode vide tout de suite le monde des corps de l'autre mode. */
+function changerMode(mode) {
+  reseau.choisirMode(mode);
+  if (modeCharge === reseau.mode) return;
+  statuesEnAttente = null;
+  jeu.remplacerStatues([]);
+  modeCharge = reseau.mode;
+  rafraichirStatues();
 }
 
 /* ------------------------------------------------------------- Parties */
@@ -111,10 +139,13 @@ function demarrerPartie() {
   derniere = null;
   gloireInfo = null;
   $('numero').textContent = 'N° …';
+  const pour = reseau.mode;
   reseau.nouvelExemplaire(lire('pseudo', '') || 'ANONYME').then((n) => {
+    if (pour !== reseau.mode) return;
     numero = n;
     $('numero').textContent = numeroTexte(n);
   });
+  afficherEtat();
   if (Date.now() - derniereMajStatues > 45000) rafraichirStatues();
   if (!premierSaut) consigne('TIRE VERS L\'ARRIÈRE,<br>LÂCHE : TU SAUTES.');
   else if (precedent) consigne(`TON CORPS PRÉCÉDENT EST FIGÉ À ${Math.max(0, Math.round(precedent.y))} M.<br>MONTE DESSUS.`, 5000);
@@ -191,9 +222,13 @@ function afficherImprime() {
     };
     choix.appendChild(b);
   }
-  $('im-note').textContent = reseau.enLigne && !st.local
-    ? `Ton corps reste figé ici ${VIE_STATUE_H} heures, pour tous les joueurs : c'est une marche, le suivant pourra monter dessus. Ensuite, recyclage — sauf si quelqu'un l'achète.`
-    : 'Ton corps reste figé ici : c\'est une marche, le suivant pourra monter dessus. Hors ligne, il ne sert qu\'à toi.';
+  if (reseau.seul) {
+    $('im-note').textContent = `Mode seul : ton corps reste figé ici ${VIE_STATUE_H} heures, sur ce téléphone. C'est une marche pour tes prochains exemplaires, et pour personne d'autre.`;
+  } else {
+    $('im-note').textContent = reseau.enLigne && !st.local
+      ? `Ton corps reste figé ici ${VIE_STATUE_H} heures, pour tous les joueurs : c'est une marche, le suivant pourra monter dessus. Ensuite, recyclage — sauf si quelqu'un l'achète.`
+      : 'Ton corps reste figé ici : c\'est une marche, le suivant pourra monter dessus. Hors ligne, il ne sert qu\'à toi.';
+  }
   montrer('ecran-imprime');
 }
 
@@ -206,7 +241,9 @@ function afficherGloire() {
     const g = gloireInfo;
     if (!g) { $('gl-detail').textContent = 'Envoi de ta gloire…'; return; }
     if (g.erreur) {
-      $('gl-detail').textContent = g.erreur === 'hors_ligne'
+      $('gl-detail').textContent = g.erreur === 'seul'
+        ? 'Tu es sorti. Mais en mode seul, personne ne l\'a vu.'
+        : g.erreur === 'hors_ligne'
         ? 'Tu es sorti. Mais hors ligne, personne ne l\'a vu.'
         : 'Le serveur doute de ta montée. Recommence, plus lentement.';
       $('gl-compte').textContent = '';
@@ -250,6 +287,7 @@ function montrerEtiquette(st) {
     const h = Math.max(0, Math.round((Date.parse(st.expire_le) - (Date.now() + ecartHorloge)) / 3600e3));
     $('et-prix').textContent = `Acheté ${st.achats || 0} fois. Recyclage dans ${h} h.`;
     bouton.hidden = !!st.mien || !!st.local;
+    if (reseau.seul) $('et-prix').textContent = `Mode seul : ce corps n'existe que sur ce téléphone. Recyclage dans ${h} h.`;
     bouton.textContent = reseau.dejaAchete(st.id) ? 'DÉJÀ ACHETÉ' : 'ACHETER (+12 H)';
     bouton.disabled = reseau.dejaAchete(st.id);
   }
@@ -377,12 +415,15 @@ $('btn-son').onclick = basculerSon;
 $('btn-son2').onclick = basculerSon;
 majBoutonSon();
 
-$('btn-jouer').onclick = () => {
+function jouer(mode) {
   son.debloquer();
   son.jouer('clic');
+  changerMode(mode);
   if (lire('pseudo', null) === null) { montrer('ecran-contrat'); $('pseudo').focus(); return; }
   demarrerPartie();
-};
+}
+$('btn-jouer-ligne').onclick = () => jouer('en-ligne');
+$('btn-jouer-seul').onclick = () => jouer('seul');
 $('btn-contrat').onclick = () => { son.jouer('clic'); $('pseudo').value = lire('pseudo', '') || ''; montrer('ecran-contrat'); };
 $('btn-signer').onclick = () => {
   son.debloquer();
@@ -511,21 +552,49 @@ async function essaiAutomatique() {
     }
   };
   const ok = (m) => console.info(`[essai] ${m}`);
+  const miens = () => jeu.statues.filter((st) => st.mien).length;
+  const partie = async (quoi) => {
+    demarrerPartie();
+    await attendreQue(() => jeu.etat === 'jeu' && !$('hud').hidden, 4000, `${quoi} lancée`);
+    await attendre(1500);
+  };
+  const imprimerEtAttendre = async (quoi, enSaut) => {
+    if (enSaut) { jeu.viser(-30, 90); jeu.lacher(); await attendre(250); }
+    imprimer();
+    await attendreQue(() => !$('ecran-imprime').hidden, 10000, `écran « imprimé » (${quoi})`);
+    ok(`${quoi} : écran « imprimé » affiché, bouton SUIVANT présent`);
+    await attendre(600);
+  };
   try {
     ecrire('pseudo', 'ESSAI');
-    for (let i = 1; i <= 3; i++) {
-      demarrerPartie();
-      await attendreQue(() => jeu.etat === 'jeu' && !$('hud').hidden, 4000, `partie ${i} lancée`);
-      await attendre(1500);
-      // la première fois en plein saut, ensuite debout
-      if (i === 1) { jeu.viser(-30, 90); jeu.lacher(); await attendre(250); }
-      imprimer();
-      await attendreQue(() => !$('ecran-imprime').hidden, 10000, `écran « imprimé » n° ${i}`);
-      ok(`impression ${i} : écran « imprimé » affiché, bouton SUIVANT présent`);
-      await attendre(600);
+    for (const cle of ['mesCorps', 'corpsSeul', 'compteurSeul', 'statsSeul']) localStorage.removeItem(`exemplaire.${cle}`);
+
+    // Mode seul : deux corps, dont un en plein saut
+    changerMode('seul');
+    await partie('partie seule 1');
+    // Sur un téléphone lent, la chute depuis la presse peut durer plus que 1,5 s
+    await attendreQue(() => jeu.j.sol, 8000, 'atterrissage du nouvel exemplaire');
+    if (jeu.j.sol !== jeu.niveau.depart.boite) {
+      throw new Error(`le joueur n'est pas sur la corniche la plus basse (sur : ${jeu.j.sol?.type ?? 'rien'}, y = ${jeu.j.y.toFixed(2)})`);
     }
-    demarrerPartie();
-    await attendre(1200);
+    ok(`départ sur la corniche la plus basse (${jeu.niveau.depart.y.toFixed(1)} m)`);
+    await imprimerEtAttendre('seul, impression 1', true);
+    await partie('partie seule 2');
+    await imprimerEtAttendre('seul, impression 2', false);
+
+    // En ligne (réseau coupé par l'essai) : les corps du mode seul ne doivent pas y être
+    changerMode('en-ligne');
+    await partie('partie en ligne');
+    await attendreQue(() => miens() === 0, 3000, 'monde en ligne sans les corps du mode seul');
+    ok('en ligne : aucun corps du mode seul');
+    await imprimerEtAttendre('en ligne, impression', false);
+
+    // Retour au mode seul : ses deux corps, et pas celui d'en ligne
+    changerMode('seul');
+    await partie('retour au mode seul');
+    await attendreQue(() => miens() === 2, 3000, 'les deux corps du mode seul, sans celui d\'en ligne');
+    ok('seul : ses deux corps, sans celui d\'en ligne');
+
     jeu.soupe = jeu.j.y + 1;
     await attendreQue(() => !$('ecran-recycle').hidden, 10000, 'écran « recyclé »');
     ok('noyade : écran « recyclé » affiché');
@@ -533,7 +602,6 @@ async function essaiAutomatique() {
     const h0 = jeu.horloge;
     await attendre(1500);
     if (!(jeu.horloge > h0) || jeu.etat !== 'jeu') throw new Error('la boucle du jeu est arrêtée');
-    if (jeu.statues.filter((s) => s.mien).length < 3) throw new Error('corps imprimés absents du monde');
     ok('ESSAI OK');
   } catch (e) {
     console.error(`[essai] ESSAI ÉCHEC : ${e.message}`);

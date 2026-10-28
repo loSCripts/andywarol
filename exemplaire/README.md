@@ -17,6 +17,15 @@ Pour faire une marche, on saute, puis on appuie sur **IMPRIMER** en plein vol : 
 
 Le rendu imite la **sérigraphie pop art** : quatre encres par image, trame de points dans les ombres, plaque noire mal calée. À la mort, l'écran se tire comme une planche de quatre portraits du cadavre, chacun dans une autre palette.
 
+## Deux modes
+
+Sur l'écran titre, on choisit :
+
+- **EN LIGNE** — le monde partagé. Tes corps servent de marche à tous les joueurs, et tu montes sur les leurs. Numéros d'exemplaire, achats et gloire passent par le serveur.
+- **SEUL** — sans serveur, aucun échange réseau. Tes corps restent sur ton téléphone et ne servent qu'à toi (et à tes exemplaires suivants). Personne ne voit ta gloire.
+
+Les deux mondes sont séparés : un corps imprimé dans un mode n'apparaît jamais dans l'autre. Chaque exemplaire tombe de la presse sur la corniche la plus basse, à 1,2 m.
+
 ## Jouer
 
 - **Toucher, tirer en arrière, lâcher** : on saute (comme une fronde). La trajectoire s'affiche.
@@ -27,7 +36,9 @@ Le rendu imite la **sérigraphie pop art** : quatre encres par image, trame de p
 ## Où le trouver
 
 - **Site** : https://loscripts.github.io/andywarol/jeu/ (en ligne dès que cette branche est fusionnée dans `main`, voir « Le site »).
-- **APK Android** : page « Releases » du dépôt (`exemplaire-N`), fabriquée et essayée sur un téléphone virtuel par GitHub Actions (`.github/workflows/exemplaire.yml`). Toucher `exemplaire.apk`, puis ouvrir le fichier pour l'installer. Elle fonctionne aussi sans réseau (tes corps ne servent alors qu'à toi).
+- **APK Android** : page « Releases » du dépôt (`exemplaire-N`), fabriquée et essayée sur un téléphone virtuel par GitHub Actions (`.github/workflows/exemplaire.yml`). Toucher `exemplaire.apk`, puis ouvrir le fichier pour l'installer. Le mode SEUL marche sans réseau.
+
+L'essai sur téléphone virtuel lance l'appli en mode essai (`--ez essai true`, ou `?essai=1` sur le site) : le jeu joue seul, sans réseau, deux corps en mode SEUL, un en ligne, vérifie que les deux mondes restent séparés, que chaque exemplaire part de la corniche la plus basse, qu'après chaque impression l'écran SUIVANT apparaît, puis une noyade. Il écrit `ESSAI OK` dans le journal Android, sinon `ESSAI ÉCHEC` et la raison.
 
 ## Comment c'est fait
 

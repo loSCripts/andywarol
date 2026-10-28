@@ -15,7 +15,6 @@ import {
 } from './modeles.js';
 import { materiauEncre, communs } from './rendu.js';
 
-const S_NAISSANCE = 1.5;
 const FENETRE_STATUES = 24; // ne dessiner que les corps à ± 24 m de la caméra (on en voit ± 14)
 
 function hashId(id) {
@@ -40,7 +39,7 @@ export class Jeu {
     this.accu = 0;
     this.evts = [];
     this.effets = { flash: 0, grille: 0, revele: 1, rouge: 0, decal: new THREE.Vector2(1.2, -0.9) };
-    this.camAngle = S_NAISSANCE / R;
+    this.camAngle = 0;
     this.camY = 3;
     this.visee = null;
     this.batterie = null;
@@ -74,8 +73,9 @@ export class Jeu {
     sc.add(new THREE.Mesh(geoParoi(), materiauEncre({ deuxFaces: true, nervures: true, id: 0.05 })));
     sc.add(new THREE.Mesh(geoCornichesFixes(this.niveau.corniches), materiauEncre({ deuxFaces: true, id: 0.21 })));
     sc.add(new THREE.Mesh(geoDecorBoite(r), materiauEncre({ deuxFaces: true, id: 0.33 })));
-    // La presse est à gauche du point de naissance : son tapis passe sous le joueur
-    sc.add(new THREE.Mesh(geoMatrice(S_NAISSANCE - 3.8), mDeux));
+    // La presse est juste à côté de la corniche de départ, son tapis passe dessous
+    const d = this.niveau.depart;
+    sc.add(new THREE.Mesh(geoMatrice(d.s + d.l + 2.4, -1), mDeux));
     sc.add(new THREE.Mesh(geoCouvercle(), materiauEncre({ deuxFaces: true, id: 0.44 })));
 
     // Inscriptions peintes
@@ -155,6 +155,7 @@ export class Jeu {
     this.fenetreY = -999;
   }
 
+  /* celebre : { pseudo } de la personne célèbre, null, ou un texte à écrire tel quel. */
   ecrireGloire(celebre) {
     const ctx = this.cvGloire.getContext('2d');
     ctx.fillStyle = '#000';
@@ -163,7 +164,8 @@ export class Jeu {
     ctx.font = '84px Anton, Impact, sans-serif';
     ctx.textBaseline = 'middle';
     ctx.textAlign = 'center';
-    const t = celebre ? `★ ${celebre.pseudo.toUpperCase()} EST CÉLÈBRE ★` : '★ LA PLACE EST LIBRE ★';
+    const t = typeof celebre === 'string' ? celebre
+      : celebre ? `★ ${celebre.pseudo.toUpperCase()} EST CÉLÈBRE ★` : '★ LA PLACE EST LIBRE ★';
     ctx.fillText(t, 512, 68, 1000);
     this.texGloire.needsUpdate = true;
   }
@@ -235,7 +237,9 @@ export class Jeu {
   /* ------------------------------------------------------------ Partie */
 
   nouvellePartie(avecSon = true) {
-    this.j = creerJoueur(S_NAISSANCE, 6.2);
+    // Chaque exemplaire tombe de la presse sur la corniche la plus basse
+    const d = this.niveau.depart;
+    this.j = creerJoueur(d.s + d.l / 2, d.y + 2.2);
     this.j.face = 1;
     this.monde.t = 0;
     for (const b of this.monde.fragiles) { b.actif = true; b.contact = undefined; b.chute = undefined; }
@@ -247,8 +251,8 @@ export class Jeu {
     this.mort = null;
     this.mannequin.visible = true;
     this.mannequin.rotation.set(0, 0, 0);
-    this.camAngle = S_NAISSANCE / R;
-    this.camY = 4;
+    this.camAngle = this.j.s / R;
+    this.camY = d.y + 2.5;
     Object.assign(this.effets, { flash: 0.6, grille: 0, revele: 1, rouge: 0 });
     this.effets.decal.set(1.2, -0.9);
     this.son.etouffer(false);
