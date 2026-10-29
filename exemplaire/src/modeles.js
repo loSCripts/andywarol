@@ -438,3 +438,67 @@ export function geoBandeauGloire() {
   g.translate(0, HAUT_BOITE - 3.2, 0);
   return g;
 }
+
+/* ---------------------------------------------------------------- Obstacles */
+
+/* Rayon où passent chaînes et balanciers : devant les corniches (côté caméra),
+   pour ne jamais traverser une corniche à l'image. La physique, elle, est en 2D. */
+export const R_SUSPENDUS = R_INT - 0.45;
+
+/* Exemplaire suspendu par les pieds à un crochet : bras ballants vers le bas.
+   Pieds à y = 0, tête vers y = −1,56, tourné vers le centre de la boîte. */
+export function geoSuspendu() {
+  const corps = geoPose(5);
+  corps.rotateZ(Math.PI);
+  corps.rotateY(-Math.PI / 2);
+  corps.computeBoundingBox();
+  corps.translate(0, -corps.boundingBox.max.y, 0);
+  const crochet = encrer(new THREE.TorusGeometry(0.12, 0.03, 4, 8, Math.PI * 1.4), ENCRE.DETAIL);
+  crochet.translate(0, 0.12, 0);
+  const tige = encrer(new THREE.CylinderGeometry(0.025, 0.025, 0.3, 4), ENCRE.DETAIL);
+  tige.translate(0, 0.38, 0);
+  return fusion([corps, crochet, tige]);
+}
+
+/* Le rail d'une chaîne : un anneau qui fait le tour de la boîte. */
+export function geoRail(y) {
+  const rail = encrer(new THREE.TorusGeometry(R_SUSPENDUS, 0.07, 5, 120), ENCRE.DETAIL);
+  rail.rotateX(Math.PI / 2);
+  rail.translate(0, y, 0);
+  return rail;
+}
+
+/* Tête de presse (bloc, bande de danger, semelle) et tige du vérin, dans le
+   repère de la corniche : x = rayon (vers la paroi), z = sens des s croissants.
+   Bas du bloc à y = 0. */
+export function geoTetePresse(l) {
+  const xC = (R_INT + R_MUR) / 2;
+  const bloc = (w, h, d, x, y, z, encre) => {
+    const g = encrer(new THREE.BoxGeometry(w, h, d), encre);
+    g.translate(x, y, z);
+    return g;
+  };
+  return fusion([
+    bloc(R_MUR - R_INT, 1.15, l, xC, 0.725, 0, ENCRE.DETAIL),
+    bloc(R_MUR - R_INT + 0.04, 0.15, l + 0.04, xC, 0.075, 0, ENCRE.MUR),
+    bloc(0.04, 0.3, l + 0.02, R_INT - 0.02, 0.75, 0, ENCRE.ACCENT),
+    (() => { const g = encrer(new THREE.CylinderGeometry(0.2, 0.2, 7, 8, 1, true), ENCRE.MUR); g.translate(xC + 0.4, 1.3 + 3.5, 0); return g; })(),
+  ]);
+}
+
+/* Guide du vérin, fixé à la paroi au-dessus de la presse. */
+export function geoGuidePresse(s, y) {
+  const g = encrer(new THREE.BoxGeometry(1.2, 0.7, 1.0), ENCRE.DETAIL);
+  g.translate((R_INT + R_MUR) / 2 + 0.6, y, 0);
+  g.rotateY(-s / R);
+  return g;
+}
+
+/* Potence d'un balancier : une poutre qui sort de la paroi jusqu'au pivot. */
+export function geoPotence(s, y) {
+  const long = R_MUR - R_SUSPENDUS;
+  const g = encrer(new THREE.BoxGeometry(long, 0.25, 0.3), ENCRE.DETAIL);
+  g.translate(R_SUSPENDUS + long / 2, y + 0.12, 0);
+  g.rotateY(-s / R);
+  return g;
+}

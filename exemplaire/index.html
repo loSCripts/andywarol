@@ -27,6 +27,18 @@
     <button id="btn-imprimer" type="button"><b>IMPRIMER</b><small id="imprimer-aide"></small></button>
     <button id="btn-pause" type="button" aria-label="Pause">❚❚</button>
     <div id="consigne" hidden></div>
+    <!-- Outils du mode développeur (appli EXEMPLAIRE DEV, ou ?dev=1) -->
+    <div id="dev" hidden>
+      <div id="dev-zones" class="dev-ligne"></div>
+      <div class="dev-ligne">
+        <button type="button" data-outil="vol">VOL</button>
+        <button type="button" data-outil="soupe">SOUPE</button>
+        <button type="button" data-outil="invincible">INVINCIBLE</button>
+        <button type="button" data-outil="communaute">COMMUNAUTÉ</button>
+        <button type="button" data-outil="infos">INFOS</button>
+      </div>
+      <pre id="dev-infos" hidden></pre>
+    </div>
   </div>
 
   <!-- Écran titre -->
@@ -35,6 +47,8 @@
     <p class="accroche">Ton corps est la marche du suivant.</p>
     <p id="stats" class="tampon-large">— PRODUITS · — DEBOUT · — SORTIS</p>
     <p id="titre-celebre" class="celebre"></p>
+    <p id="tampon-dev" class="tampon-large" hidden>MODE DÉVELOPPEUR — RIEN N'EST ENVOYÉ</p>
+    <button id="btn-jouer-dev" class="gros-bouton" type="button" hidden>ENTRER</button>
     <div class="modes">
       <button id="btn-jouer-ligne" class="gros-bouton mode" type="button">EN LIGNE<small>Monde partagé : ton corps sert de marche à tout le monde</small></button>
       <button id="btn-jouer-seul" class="gros-bouton mode seul" type="button">SEUL<small>Sans serveur : ton corps ne sert qu'à toi</small></button>
@@ -80,9 +94,9 @@
 
   <!-- Recyclé -->
   <section id="ecran-recycle" class="ecran rouge" hidden>
-    <div class="titre-geant" data-texte="RECYCLÉ">RECYCLÉ</div>
+    <div id="re-titre" class="titre-geant">RECYCLÉ</div>
     <p id="re-detail" class="accroche"></p>
-    <p class="accroche petit">Il n'a servi à rien. La soupe, elle, est meilleure.</p>
+    <p id="re-morale" class="accroche petit">Il n'a servi à rien. La soupe, elle, est meilleure.</p>
     <button id="btn-suivant-re" class="gros-bouton noir" type="button">SUIVANT</button>
   </section>
 

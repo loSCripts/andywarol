@@ -378,3 +378,38 @@ button { font: inherit; color: inherit; cursor: pointer; border: 0; background: 
   font-weight: 700;
   z-index: 50;
 }
+
+/* ------------------------------------------------------------- Développeur */
+
+#dev {
+  position: absolute;
+  top: calc(112px + var(--haut));
+  left: 40px;
+  right: 8px;
+  display: grid;
+  gap: 4px;
+  pointer-events: none;
+}
+
+.dev-ligne { display: flex; flex-wrap: wrap; gap: 4px; }
+
+.dev-ligne button {
+  pointer-events: auto;
+  font: 400 12px var(--titre);
+  letter-spacing: 0.05em;
+  padding: 4px 7px;
+  background: var(--encre);
+  color: var(--papier);
+  border: 2px solid var(--papier);
+}
+
+.dev-ligne button.actif { background: var(--turquoise); color: var(--encre); border-color: var(--encre); }
+
+#dev-infos {
+  justify-self: start;
+  font: 700 11px var(--machine);
+  background: rgba(22, 18, 26, 0.85);
+  color: var(--jaune);
+  padding: 4px 6px;
+  white-space: pre-wrap;
+}

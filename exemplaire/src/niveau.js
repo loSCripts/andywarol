@@ -12,6 +12,9 @@ import { alea } from './alea.js';
 import { enroule, ecart } from './physique.js';
 
 export const GRAINE = 1115;
+/* Numéro du niveau, envoyé au serveur avec chaque corps : un corps posé dans
+   une version du niveau n'a pas de sens dans une autre (il flotterait). */
+export const VERSION_NIVEAU = 2;
 
 const PARAMS = [
   { l: [3.2, 6.0], gap: [1.2, 3.4], dy: [0.9, 2.3] },
@@ -106,7 +109,14 @@ export function genererNiveau(graine = GRAINE) {
       if (essai === 14 || essai === 28) dir = -dir;
       let type = 'fixe';
       const tir = r.suivant();
-      if (zone === 0 && tir < 0.22) type = 'tapis';
+      // La Chaîne : on apprend tout tôt, un élément à la fois
+      if (zone === 0) {
+        if (tir < 0.18) type = 'tapis';
+        else if (tir < 0.27 && cur.y > 8) type = 'mobile';
+        else if (tir < 0.36 && cur.y > 16) type = 'fragile';
+        // une bouche de vapeur, toujours, vers 20 m : on la découvre avant l'Atelier
+        if (cur.y > 20 && compteBouches < 1 && cur.type !== 'mobile') type = 'bouche';
+      }
       if (zone === 1) {
         if (tir < 0.17) type = 'mobile';
         else if (tir < 0.31) type = 'fragile';
@@ -210,6 +220,44 @@ export function genererNiveau(graine = GRAINE) {
   // Point de départ : la corniche fixe la plus basse (la presse est à sa droite)
   const depart = corniches.filter((c) => c.type === 'fixe').reduce((a, b) => (b.y < a.y ? b : a));
 
+  /* Obstacles. Les presses s'abattent sur des corniches du chemin (assez
+     longues pour s'arrêter à côté) ; les chaînes font le tour de la boîte à
+     trois hauteurs avec des exemplaires suspendus ; les balanciers passent
+     au-dessus d'écarts entre deux corniches. */
+  const presses = [], chaines = [], balanciers = [];
+  const dessusLibre = (c, hauteur) => corniches.every((o) => o === c || o.type === 'sol' || o.y <= c.y
+    || o.y - o.ep > c.y + hauteur || !chevaucheArc(o.s - (o.amp || 0), o.l + 2 * (o.amp || 0), c.s, c.l, 0.6));
+  for (const c of chemin) {
+    if (c.type !== 'fixe' || c.l < (c.zone === 0 ? 3.4 : 3.0) || c.y < 6 || c.vide) continue;
+    if (!r.chance(c.zone === 0 ? 0.45 : 0.35) || !dessusLibre(c, 7)) continue;
+    presses.push({
+      s: enroule(c.s + c.l * r.entre(0.42, 0.58)), l: 1.4, yBas: c.y, yHaut: c.y + 4.4,
+      periode: r.entre(3.0, 4.2), phase: r.entre(0, 4.2), corniche: c.id,
+    });
+  }
+  for (const [y, nombre, vitesse] of [[17, 8, 1.2], [33, 7, -1.4], [62, 9, 2.0]]) {
+    chaines.push({ y, nombre, espacement: C / nombre, vitesse, s0: r.entre(0, C) });
+  }
+  const ecarts = [];
+  for (let i = 0; i + 1 < chemin.length; i++) {
+    const a = chemin[i], b = chemin[i + 1];
+    if (a.type === 'mobile' || b.type === 'mobile' || b.y < 24) continue;
+    const versPlus = ecart(b.s, a.s) > 0;
+    const debut = versPlus ? a.s + a.l : a.s, fin = versPlus ? b.s : b.s + b.l;
+    const g = Math.abs(ecart(fin, debut));
+    if (g >= 2.2) ecarts.push({ a, b, milieu: enroule(debut + (versPlus ? 1 : -1) * (g / 2)) });
+  }
+  for (const zone of [0, 1]) {
+    const choix = ecarts.filter((e) => e.b.zone === zone);
+    for (let k = 0; k < (zone === 0 ? 1 : 3) && choix.length; k++) {
+      const e = choix.splice(Math.floor(r.suivant() * choix.length), 1)[0];
+      balanciers.push({
+        s: e.milieu, y: Math.max(e.a.y, e.b.y) + 4.8, longueur: 3.3,
+        amp: r.entre(0.7, 0.85), periode: r.entre(2.8, 3.6), phase: r.entre(0, 6.28),
+      });
+    }
+  }
+
   // Inscriptions sur la paroi
   textes.push({ texte: 'LA CHAÎNE', s: depart.s + depart.l / 2 - 1.4, y: depart.y + 4.2, h: 1.2, fort: true });
   const pres = (y) => chemin.concat(vide).reduce((m, c) => (Math.abs(c.y - y) < Math.abs(m.y - y) ? c : m));
@@ -232,5 +280,14 @@ export function genererNiveau(graine = GRAINE) {
   // L'étiquette de la boîte, vue de l'intérieur : à l'envers, en filigrane
   textes.push({ texte: 'SOUPE  CONCENTRÉE', s: 0, y: 72, h: 9, fort: false, miroir: true, tour: true });
 
-  return { corniches, chemin, vide, fondateurs, deco, textes, yVide, p0, depart };
+  if (presses.length) {
+    const p = presses[0], c = corniches[p.corniche];
+    textes.push({ texte: 'NE PAS STATIONNER SOUS LA PRESSE', s: c.s + c.l / 2, y: c.y + 7.2, h: 0.7, fort: true });
+  }
+  panneau('LA CHAÎNE NE S\'ARRÊTE JAMAIS', 14, 0.8);
+
+  return {
+    corniches, chemin, vide, fondateurs, deco, textes, yVide, p0, depart,
+    obstacles: { presses, chaines, balanciers }, version: VERSION_NIVEAU,
+  };
 }

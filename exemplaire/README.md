@@ -26,6 +26,32 @@ Sur l'écran titre, on choisit :
 
 Les deux mondes sont séparés : un corps imprimé dans un mode n'apparaît jamais dans l'autre. Chaque exemplaire tombe de la presse sur la corniche la plus basse, à 1,2 m.
 
+## Les obstacles
+
+La Chaîne (0–40 m) et L'Atelier (40–89 m) ne sont plus une suite de corniches : on y apprend un élément après l'autre.
+
+- **La presse** s'abat sur une corniche. Elle prévient : elle tremble et son voyant rouge s'allume une demi-seconde avant de tomber. Rester dessous, c'est « ÉCRASÉ ».
+- **La chaîne** fait le tour de la boîte à trois hauteurs (17, 33 et 62 m) : des exemplaires suspendus par les pieds défilent et font tomber ceux qu'ils touchent.
+- **Le balancier** : un exemplaire pendu se balance au-dessus d'un écart entre deux corniches.
+- Tapis roulants, plateformes mobiles, plateformes fragiles et une bouche de vapeur dès La Chaîne.
+
+Le Vide ne change pas : c'est la communauté qui le construit.
+
+## La musique
+
+Une valse mécanique en la mineur, composée note à note (`src/musique.js`) : deux thèmes de 8 mesures, une basse « oum-pa-pa », des percussions d'usine. Elle change avec l'endroit : berceuse lente à l'écran titre, valse avec basse et percussions dans La Chaîne, accords et coups de tôle dans L'Atelier, mélodie seule une octave plus haut avec un écho calé sur le tempo dans Le Vide. Quand la soupe approche, le tempo monte jusqu'à une fois et demie.
+
+## L'appli des développeurs
+
+**EXEMPLAIRE DEV** (`exemplaire-dev.apk` dans Releases, ou `?dev=1` sur le site) s'installe à côté du jeu, avec sa propre icône. Elle n'envoie rien au serveur et garde ses corps à part. Pendant la partie, une barre d'outils :
+
+- **Téléportation** : départ, 15, 30, 45, 60, 75 m, le Vide, sa 4e marche, le bord.
+- **VOL** : vol libre, on déplace l'exemplaire du doigt à travers tout.
+- **SOUPE** : arrêter ou relancer la soupe.
+- **INVINCIBLE** (actif au départ) : ni noyade ni presse.
+- **COMMUNAUTÉ** : pose des corps simulés sur tous les écarts du Vide, pour monter jusqu'au bord et voir l'écran de gloire.
+- **INFOS** : position, zone, images par seconde, appels de dessin, triangles.
+
 ## Jouer
 
 - **Toucher, tirer en arrière, lâcher** : on saute (comme une fronde). La trajectoire s'affiche.
@@ -36,9 +62,12 @@ Les deux mondes sont séparés : un corps imprimé dans un mode n'apparaît jama
 ## Où le trouver
 
 - **Site** : https://loscripts.github.io/andywarol/jeu/ (en ligne dès que cette branche est fusionnée dans `main`, voir « Le site »).
-- **APK Android** : page « Releases » du dépôt (`exemplaire-N`), fabriquée et essayée sur un téléphone virtuel par GitHub Actions (`.github/workflows/exemplaire.yml`). Toucher `exemplaire.apk`, puis ouvrir le fichier pour l'installer. Le mode SEUL marche sans réseau.
+- **APK Android** : page « Releases » du dépôt (`exemplaire-N`), fabriquée et essayée sur un téléphone virtuel par GitHub Actions (`.github/workflows/exemplaire.yml`). Toucher `exemplaire.apk`, puis ouvrir le fichier pour l'installer. Le mode SEUL marche sans réseau. `exemplaire-dev.apk` est l'appli des développeurs.
 
-L'essai sur téléphone virtuel lance l'appli en mode essai (`--ez essai true`, ou `?essai=1` sur le site) : le jeu joue seul, sans réseau, deux corps en mode SEUL, un en ligne, vérifie que les deux mondes restent séparés, que chaque exemplaire part de la corniche la plus basse, qu'après chaque impression l'écran SUIVANT apparaît, puis une noyade. Il écrit `ESSAI OK` dans le journal Android, sinon `ESSAI ÉCHEC` et la raison.
+L'essai sur téléphone virtuel lance chaque appli en mode essai (`--ez essai true`, ou `?essai=1` sur le site) ; elle joue seule, sans réseau, et écrit `ESSAI OK` dans le journal Android, sinon `ESSAI ÉCHEC` et la raison.
+
+- Le jeu : deux corps en mode SEUL, un en ligne, les deux mondes restent séparés, chaque exemplaire part de la corniche la plus basse, l'écran SUIVANT apparaît après chaque impression, une presse écrase (écran « ÉCRASÉ »), une noyade.
+- L'appli des développeurs : toutes les téléportations sans mourir, l'invincibilité sous une presse, le vol libre, la communauté simulée, puis le bord et l'écran de gloire.
 
 ## Comment c'est fait
 
@@ -51,12 +80,15 @@ Tout est fabriqué par le code : **aucune image, aucun modèle, aucun son à té
 | `src/modeles.js` | Les modèles 3D : mannequin articulé (7 poses), corniches courbes, paroi nervurée, presse, couvercle arraché, petites boîtes, inscriptions. |
 | `src/rendu.js` | Le rendu sérigraphie : la scène est rendue en « numéros d'encre » dans une petite texture, puis une seule passe imprime l'image (palettes, trame, contours, décalage). Qualité ajustée selon la vitesse du téléphone. |
 | `src/jeu.js` | La partie : joueur, corps instanciés (un seul appel de dessin par pose), soupe, caméra, fins. |
-| `src/son.js` | Sons synthétisés : bourdon d'usine, horloge qui accélère quand la soupe approche, boîte à musique, réverbération de boîte métallique. |
+| `src/musique.js` | La partition de la valse (mélodie, accords), écrite note à note. |
+| `src/son.js` | Sons synthétisés et séquenceur de la musique : boîte à musique, basse, percussions d'usine, écho, réverbération de boîte métallique. |
 | `src/reseau.js` | Échanges avec le serveur, avec repli hors ligne. |
-| `serveur/schema.sql` | Le serveur (Supabase). |
+| `serveur/schema.sql` | Le serveur (Supabase), puis `serveur/migrations/` dans l'ordre. |
 | `android/` | L'appli Android : un écran WebView qui sert le jeu depuis l'APK. |
 
 ## Le serveur
+
+**Une version du niveau, un monde.** Chaque corps garde le numéro du niveau où il a été imprimé (`niveau`, actuellement 2 : celui des obstacles). Un corps posé dans une autre version du niveau flotterait dans le vide : le jeu ne demande donc que les corps de sa version (`statues_du_niveau`, `imprimer_dans`). Les anciennes appli (1.4, 1.5) restent dans le monde du niveau 1 ; rien n'a été supprimé (`serveur/migrations/002_versions_du_niveau.sql`).
 
 Projet Supabase **exemplaire** (`yvrhwdkakdcorotnteho`, Paris). Les tables sont fermées : tout passe par 9 fonctions qui vérifient ce que le jeu envoie.
 
@@ -87,8 +119,8 @@ npm run build       # le site dans dist/ (l'APK l'embarque)
 npm run site        # le site dans ../jeu/ (publié par GitHub Pages)
 npm run dev         # pour développer
 
-# APK (Java 17, SDK Android avec la plateforme 37, Gradle 9.6.1)
-gradle -p android assembleRelease
+# APK (Java 17, SDK Android avec la plateforme 37, Gradle 9.6.1) : le jeu et l'appli des développeurs
+gradle -p android assembleJeuRelease assembleDevRelease
 ```
 
-Pour réinstaller le serveur sur un autre projet Supabase : exécuter `serveur/schema.sql`, puis changer l'adresse et la clé publique dans `src/reglages.js`. `serveur/essais.sql` contient les essais du serveur (à jouer sur une base de test, jamais en production).
+Pour réinstaller le serveur sur un autre projet Supabase : exécuter `serveur/schema.sql` puis les fichiers de `serveur/migrations/` dans l'ordre, puis changer l'adresse et la clé publique dans `src/reglages.js`. `serveur/essais.sql` contient les essais du serveur (à jouer sur une base de test, jamais en production).

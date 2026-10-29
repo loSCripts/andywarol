@@ -67,14 +67,17 @@ jobs:
         env:
           NUMERO_VERSION: ${{ github.run_number }}
         run: |
-          gradle -p android assembleRelease --no-daemon
-          cp android/build/outputs/apk/release/exemplaire-release.apk ../exemplaire.apk
+          gradle -p android assembleJeuRelease assembleDevRelease --no-daemon
+          cp android/build/outputs/apk/jeu/release/exemplaire-jeu-release.apk ../exemplaire.apk
+          cp android/build/outputs/apk/dev/release/exemplaire-dev-release.apk ../exemplaire-dev.apk
 
-      - name: Garder l'APK
+      - name: Garder les deux APK
         uses: actions/upload-artifact@v4
         with:
           name: apk
-          path: exemplaire.apk
+          path: |
+            exemplaire.apk
+            exemplaire-dev.apk
           retention-days: 7
 
 
@@ -109,7 +112,10 @@ jobs:
           arch: x86_64
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
-          script: bash exemplaire/android/essai-emulateur.sh exemplaire.apk
+          # Le jeu, puis l'appli des développeurs : chacune joue sa séquence d'essai
+          script: |
+            bash exemplaire/android/essai-emulateur.sh exemplaire.apk io.github.loscripts.exemplaire
+            bash exemplaire/android/essai-emulateur.sh exemplaire-dev.apk io.github.loscripts.exemplaire.dev
 
       - name: Garder les captures d'écran
         if: always()
@@ -139,9 +145,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "exemplaire-${{ github.run_number }}" exemplaire.apk \
+          gh release create "exemplaire-${{ github.run_number }}" exemplaire.apk exemplaire-dev.apk \
             --repo "${{ github.repository }}" \
             --target "${{ github.sha }}" \
             --title "EXEMPLAIRE n° ${{ github.run_number }}" \
             --latest \
-            --notes "Le jeu EXEMPLAIRE pour Android. Sur le téléphone, touche exemplaire.apk juste en dessous pour la télécharger, puis ouvre le fichier pour l'installer (autorise l'installation depuis le navigateur si Android le demande). Avant d'être publiée, cette version a été essayée sur un téléphone virtuel Android 15 : aucun plantage, aucune erreur JavaScript."
+            --notes "Le jeu EXEMPLAIRE pour Android : touche exemplaire.apk juste en dessous pour la télécharger, puis ouvre le fichier pour l'installer (autorise l'installation depuis le navigateur si Android le demande). exemplaire-dev.apk est l'appli des développeurs (EXEMPLAIRE DEV) : téléportation, vol libre, invincibilité ; elle s'installe à côté du jeu et n'envoie rien au serveur. Avant d'être publiées, les deux ont été essayées sur un téléphone virtuel Android 15 : séquence d'essai complète, aucun plantage, aucune erreur JavaScript."

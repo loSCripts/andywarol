@@ -83,9 +83,14 @@ class Ecran : ComponentActivity() {
             }
         })
 
-        // --ez essai true (essai automatique) : le jeu joue tout seul, sans réseau
-        val essai = if (intent.getBooleanExtra("essai", false)) "?essai=1" else ""
-        if (etat == null) vue.loadUrl("https://$HOTE/assets/index.html$essai") else vue.restoreState(etat)
+        // Appli des développeurs : le jeu s'ouvre en mode développeur (rien n'est envoyé).
+        // --ez essai true (essai automatique) : le jeu joue tout seul, sans réseau.
+        val options = listOfNotNull(
+            "dev=1".takeIf { BuildConfig.DEV },
+            "essai=1".takeIf { intent.getBooleanExtra("essai", false) },
+        )
+        val requete = if (options.isEmpty()) "" else options.joinToString("&", prefix = "?")
+        if (etat == null) vue.loadUrl("https://$HOTE/assets/index.html$requete") else vue.restoreState(etat)
     }
 
     private fun pleinEcran() {

@@ -31,6 +31,29 @@ android {
         }
     }
 
+    // Deux applis depuis le même code : le jeu, et l'appli des développeurs
+    // (« EXEMPLAIRE DEV », installable à côté) qui ouvre le jeu en mode développeur.
+    flavorDimensions += "public"
+    productFlavors {
+        create("jeu") {
+            dimension = "public"
+            resValue("string", "nom_appli", "EXEMPLAIRE")
+            buildConfigField("boolean", "DEV", "false")
+        }
+        create("dev") {
+            dimension = "public"
+            applicationIdSuffix = ".dev"
+            versionNameSuffix = "-dev"
+            resValue("string", "nom_appli", "EXEMPLAIRE DEV")
+            buildConfigField("boolean", "DEV", "true")
+        }
+    }
+
+    buildFeatures {
+        buildConfig = true
+        resValues = true
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true

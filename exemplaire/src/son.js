@@ -2,17 +2,18 @@
    Une réverbération de « boîte métallique » (réponse impulsionnelle fabriquée
    ici) donne à chaque bruit l'écho d'une conserve géante. */
 
-const GAMME = [0, 3, 5, 7, 10, 12, 15, 17]; // mineur pentatonique, sur la
+import { PARTITION, LONGUEUR, CROCHES_PAR_MESURE, TEMPO, frequence } from './musique.js';
 
 export class Son {
   constructor() {
     this.ctx = null;
     this.muet = false;
     this.danger = 0;
-    this.prochainTic = 0;
-    this.prochaineNote = 0;
     this.prochaineBulle = 0;
-    this.ticTac = false;
+    // Séquenceur de la musique : position dans la partition et heure de la prochaine croche
+    this.musique = false;
+    this.position = 0;
+    this.prochainPas = 0;
     this.ambianceActive = false;
   }
 
@@ -37,6 +38,13 @@ export class Son {
     this.envoiReverb.gain.value = 0.55;
     this.envoiReverb.connect(this.reverb).connect(this.maitre);
     this.bruitBuf = this.bruitBlanc(2);
+    // Écho du Vide : la mélodie y revient, plus faible, comme dans un puits
+    this.echo = ctx.createDelay(2);
+    this.echo.delayTime.value = 0.6;
+    const retour = ctx.createGain();
+    retour.gain.value = 0.38;
+    this.echo.connect(retour).connect(this.echo);
+    this.echo.connect(this.maitre);
   }
 
   basculerMuet() {
@@ -162,6 +170,21 @@ export class Son {
         [0, 4, 7, 12, 16, 19, 24].forEach((d, i) => this.ton(t + i * 0.09, 0.9, 'square', 261.6 * 2 ** (d / 12), 261.6 * 2 ** (d / 12), 0.05, 0.5));
         break;
       }
+      case 'presse':
+        // une presse touche le fond : coup sourd et tôle
+        this.ton(t, 0.25, 'sine', 70, 32, 0.6, 0.5);
+        this.bruit(t, 0.12, 'lowpass', 2500, 300, 0.4, 1, 0.5);
+        this.metal(t, 120, 0.1, 0.9);
+        break;
+      case 'ecrase':
+        this.ton(t, 0.3, 'sine', 90, 30, 1.0, 0.6);
+        this.bruit(t, 0.18, 'bandpass', 900, 200, 0.7, 2, 0.4);
+        for (let i = 0; i < 6; i++) this.bruit(t + 0.02 + i * 0.025, 0.02, 'highpass', 3000, 3000, 0.25, 1, 0.2); // craquements
+        break;
+      case 'heurt':
+        this.ton(t, 0.12, 'sine', 160, 70, 0.45, 0.3);
+        this.metal(t + 0.02, 260, 0.06, 0.4); // le crochet qui tinte
+        break;
       case 'naissance':
         this.metal(t, 70, 0.3, 1.4);
         this.bruit(t, 0.35, 'lowpass', 3000, 200, 0.5, 1, 0.5);
@@ -208,26 +231,91 @@ export class Son {
     src.start();
   }
 
-  /* Appelé à chaque image pendant la partie : horloge d'usine qui accélère
-     quand la soupe approche, boîte à musique, bulles. danger ∈ [0, 1]. */
-  battre(danger, actif) {
-    if (!this.ctx || this.muet || !actif) return;
-    const t = this.t;
-    if (t >= this.prochainTic) {
-      this.ticTac = !this.ticTac;
-      this.bruit(t, 0.03, 'bandpass', this.ticTac ? 3200 : 2300, 2000, 0.12 + danger * 0.12, 8, 0.4);
-      this.prochainTic = t + 0.95 - danger * 0.72;
+  /* ------------------------------------------------------------ Musique */
+
+  /* Note de boîte à musique : une lame d'acier, un partiel aigu qui s'éteint vite. */
+  lame(t, f, dur, vol, echo) {
+    const ctx = this.ctx;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol, t + 0.004);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    for (const [k, v] of [[1, 1], [2, 0.18], [4.02, 0.22]]) {
+      const o = ctx.createOscillator();
+      o.type = 'sine';
+      o.frequency.value = f * k;
+      const gk = ctx.createGain();
+      gk.gain.value = v;
+      o.connect(gk).connect(g);
+      o.start(t);
+      o.stop(t + dur + 0.05);
     }
-    if (t >= this.prochaineNote) {
-      const n = GAMME[Math.floor(Math.random() * GAMME.length)];
-      const f = 220 * 2 ** (n / 12) * (Math.random() < 0.2 ? 2 : 1);
-      this.ton(t, 1.6, 'triangle', f, f, 0.05, 0.9);
-      this.ton(t, 0.6, 'sine', f * 4.02, f * 4.02, 0.012, 0.9); // éclat de boîte à musique
-      this.prochaineNote = t + (Math.random() < 0.3 ? 0.25 : 0.5 + Math.random() * 1.4) * (1 - danger * 0.5);
+    g.connect(this.sortie(0.5));
+    if (echo) {
+      const e = ctx.createGain();
+      e.gain.value = 0.6;
+      g.connect(e).connect(this.echo);
     }
-    if (danger > 0.2 && t >= this.prochaineBulle) {
+  }
+
+  /* Une croche de la partition, à l'heure t. zone : 'titre', 0, 1 ou 2. */
+  jouerPas(i, t, zone, croche) {
+    const p = PARTITION[i];
+    const c = i % CROCHES_PAR_MESURE;
+    const accord = PARTITION[i - c].accord;
+    const vide = zone === 2;
+    // Mélodie : une octave plus haut et avec écho dans le Vide
+    for (const n of p.melodie) {
+      const f = frequence(n.note + (vide ? 12 : 0));
+      this.lame(t, f, Math.max(0.5, n.duree * croche * 1.8), vide ? 0.045 : 0.06, vide);
+    }
+    if (zone === 'titre') {
+      if (c === 0) this.ton(t, croche * 5.5, 'sine', frequence(accord.basse), frequence(accord.basse), 0.05, 0.6);
+      return;
+    }
+    if (vide) {
+      // un bourdon, rien d'autre : il n'y a plus d'usine ici
+      if (c === 0) this.ton(t, croche * 6, 'sine', frequence(accord.basse - 12), frequence(accord.basse - 12), 0.07, 0.8);
+      return;
+    }
+    // Valse : la basse sur le temps, les accords sur les deux autres
+    if (c === 0) this.ton(t, croche * 1.6, 'triangle', frequence(accord.basse), frequence(accord.basse), 0.12, 0.2);
+    if ((c === 2 || c === 4) && zone === 1) {
+      for (const n of accord.notes) this.ton(t, croche * 0.7, 'square', frequence(n), frequence(n), 0.011, 0.3);
+    }
+    // Percussions d'usine
+    if (c === 0) this.ton(t, 0.14, 'sine', 95, 42, 0.32, 0.2);                       // coup de presse
+    if (c === 2 || c === 4) this.bruit(t, 0.035, 'highpass', 6500, 6500, 0.05, 1, 0.1); // vapeur
+    if (zone === 1) {
+      if (c === 0 && (i / CROCHES_PAR_MESURE) % 2 === 1) this.metal(t, 180, 0.05, 0.6);  // tôle, une mesure sur deux
+      if (c === 5) this.bruit(t, 0.02, 'bandpass', 2600, 2600, 0.06, 6, 0.1);          // cliquet
+      if (c === 4 && Math.floor(i / CROCHES_PAR_MESURE) % 4 === 3) this.bruit(t, 0.12, 'bandpass', 420, 420, 0.16, 1.5, 0.4);
+    }
+  }
+
+  /* Appelé à chaque image : fait avancer la musique (programmée un peu en
+     avance, pour un rythme exact quelle que soit la fluidité de l'image).
+     danger ∈ [0, 1] accélère le tempo ; zone : 'titre', 0, 1 ou 2. */
+  battre(danger, actif, zone = 0) {
+    if (!this.ctx || this.muet || !actif) { this.musique = false; return; }
+    const maintenant = this.ctx.currentTime;
+    if (!this.musique || this.prochainPas < maintenant - 0.3) {
+      // reprise (début, retour de pause, onglet caché) : on repart au début d'une mesure
+      this.musique = true;
+      this.prochainPas = maintenant + 0.08;
+      this.position -= this.position % CROCHES_PAR_MESURE;
+    }
+    const croche = 30 / (TEMPO[zone] * (1 + 0.5 * danger));
+    // L'écho tombe sur le temps suivant (une noire plus tard) : il renforce le rythme au lieu de le brouiller
+    this.echo.delayTime.setTargetAtTime(2 * croche, maintenant, 0.1);
+    while (this.prochainPas < maintenant + 0.2) {
+      this.jouerPas(this.position, this.prochainPas, zone, croche);
+      this.position = (this.position + 1) % LONGUEUR;
+      this.prochainPas += croche;
+    }
+    if (danger > 0.2 && maintenant >= this.prochaineBulle) {
       this.jouer('bulle', danger);
-      this.prochaineBulle = t + 0.15 + Math.random() * (1.4 - danger);
+      this.prochaineBulle = maintenant + 0.15 + Math.random() * (1.4 - danger);
     }
   }
 }

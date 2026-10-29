@@ -352,6 +352,8 @@ export class Imprimerie {
     }
     this.renderer.setRenderTarget(this.rt);
     this.renderer.render(scene, camera);
+    // chiffres de la passe scène (la passe d'impression, elle, ne fait que 2 triangles)
+    this.statsScene = { appels: this.renderer.info.render.calls, triangles: this.renderer.info.render.triangles };
     this.renderer.setRenderTarget(null);
     this.renderer.render(this.scenePost, this.camPost);
   }

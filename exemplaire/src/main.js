@@ -147,7 +147,7 @@ function demarrerPartie() {
   });
   afficherEtat();
   if (Date.now() - derniereMajStatues > 45000) rafraichirStatues();
-  if (!premierSaut) consigne('TIRE VERS L\'ARRIÈRE,<br>LÂCHE : TU SAUTES.');
+  if (!premierSaut && !jeu.dev.actif) consigne('TIRE VERS L\'ARRIÈRE,<br>LÂCHE : TU SAUTES.');
   else if (precedent) consigne(`TON CORPS PRÉCÉDENT EST FIGÉ À ${Math.max(0, Math.round(precedent.y))} M.<br>MONTE DESSUS.`, 5000);
   else consigne(null);
 }
@@ -193,7 +193,16 @@ function finDePlanche() {
   if (!mo) return;
   if (mo.type === 'imprime') afficherImprime();
   else if (mo.type === 'recycle') {
-    $('re-detail').textContent = `Exemplaire ${numeroTexte(numero).replace('N°', 'n°')}. Mort dans la soupe à ${jeu.hMax.toFixed(1).replace('.', ',')} m, après ${Math.round(jeu.duree)} secondes.`;
+    const ecrase = mo.cause === 'ecrase';
+    const ex = `Exemplaire ${numeroTexte(numero).replace('N°', 'n°')}`;
+    const h = (ecrase ? jeu.j.y : jeu.hMax).toFixed(1).replace('.', ',');
+    $('re-titre').textContent = ecrase ? 'ÉCRASÉ' : 'RECYCLÉ';
+    $('re-detail').textContent = ecrase
+      ? `${ex}. Écrasé par une presse à ${h} m, après ${Math.round(jeu.duree)} secondes.`
+      : `${ex}. Mort dans la soupe à ${h} m, après ${Math.round(jeu.duree)} secondes.`;
+    $('re-morale').textContent = ecrase
+      ? 'Elle avait prévenu. Elle tremble toujours avant de tomber.'
+      : 'Il n\'a servi à rien. La soupe, elle, est meilleure.';
     montrer('ecran-recycle');
   } else if (mo.type === 'gloire') afficherGloire();
 }
@@ -242,7 +251,7 @@ function afficherGloire() {
     if (!g) { $('gl-detail').textContent = 'Envoi de ta gloire…'; return; }
     if (g.erreur) {
       $('gl-detail').textContent = g.erreur === 'seul'
-        ? 'Tu es sorti. Mais en mode seul, personne ne l\'a vu.'
+        ? (reseau.mode === 'dev' ? 'Mode développeur : sorti, et rien n\'est envoyé.' : 'Tu es sorti. Mais en mode seul, personne ne l\'a vu.')
         : g.erreur === 'hors_ligne'
         ? 'Tu es sorti. Mais hors ligne, personne ne l\'a vu.'
         : 'Le serveur doute de ta montée. Recommence, plus lentement.';
@@ -334,9 +343,16 @@ toile.addEventListener('pointerdown', (e) => {
 
 toile.addEventListener('pointermove', (e) => {
   if (!toucher || e.pointerId !== toucher.id) return;
+  const px = toucher.x, py = toucher.y;
   toucher.x = e.clientX;
   toucher.y = e.clientY;
   const dx = toucher.x - toucher.x0, dy = toucher.y - toucher.y0;
+  if (jeu.dev.actif && jeu.dev.vol) {
+    // vol libre : le joueur suit le doigt, pas de fronde
+    toucher.vol = true;
+    jeu.deplacerVol(toucher.x - px, toucher.y - py);
+    return;
+  }
   if (Math.hypot(dx, dy) > 10) {
     $('etiquette').hidden = true;
     jeu.viser(dx, dy);
@@ -358,7 +374,7 @@ function finToucher(e, annule) {
   toucher = null;
   elast.classList.remove('actif');
   const d = Math.hypot(t.x - t.x0, t.y - t.y0);
-  if (annule) { jeu.annulerVisee(); return; }
+  if (annule || t.vol) { jeu.annulerVisee(); return; }
   if (d < 10 && performance.now() - t.t0 < 400) {
     jeu.annulerVisee();
     const st = jeu.corpsSous(t.x, t.y);
@@ -565,39 +581,87 @@ async function essaiAutomatique() {
     ok(`${quoi} : écran « imprimé » affiché, bouton SUIVANT présent`);
     await attendre(600);
   };
+  // Se poser sous une presse au moment où elle commence à trembler
+  const sousUnePresse = () => {
+    const p = jeu.niveau.obstacles.presses[0];
+    jeu.teleporter(jeu.niveau.corniches[p.corniche]);
+    jeu.j.s = p.s;
+    jeu.soupe = jeu.j.y - 30;
+    return p;
+  };
   try {
     ecrire('pseudo', 'ESSAI');
-    for (const cle of ['mesCorps', 'corpsSeul', 'compteurSeul', 'statsSeul']) localStorage.removeItem(`exemplaire.${cle}`);
-
-    // Mode seul : deux corps, dont un en plein saut
-    changerMode('seul');
-    await partie('partie seule 1');
-    // Sur un téléphone lent, la chute depuis la presse peut durer plus que 1,5 s
-    await attendreQue(() => jeu.j.sol, 8000, 'atterrissage du nouvel exemplaire');
-    if (jeu.j.sol !== jeu.niveau.depart.boite) {
-      throw new Error(`le joueur n'est pas sur la corniche la plus basse (sur : ${jeu.j.sol?.type ?? 'rien'}, y = ${jeu.j.y.toFixed(2)})`);
+    for (const k of Object.keys(localStorage)) {
+      if (/^exemplaire\.(mesCorps|corpsSeul|corpsDev|compteur|stats)/.test(k)) localStorage.removeItem(k);
     }
-    ok(`départ sur la corniche la plus basse (${jeu.niveau.depart.y.toFixed(1)} m)`);
-    await imprimerEtAttendre('seul, impression 1', true);
-    await partie('partie seule 2');
-    await imprimerEtAttendre('seul, impression 2', false);
 
-    // En ligne (réseau coupé par l'essai) : les corps du mode seul ne doivent pas y être
-    changerMode('en-ligne');
-    await partie('partie en ligne');
-    await attendreQue(() => miens() === 0, 3000, 'monde en ligne sans les corps du mode seul');
-    ok('en ligne : aucun corps du mode seul');
-    await imprimerEtAttendre('en ligne, impression', false);
+    if (jeu.dev.actif) {
+      // Appli des développeurs : téléportations, invincibilité, vol, communauté simulée, gloire
+      await partie('partie dev');
+      // toutes les destinations sauf le bord (qui fait sortir de la boîte : testé à la fin)
+      for (const b of [...$('dev-zones').children].slice(0, -1)) {
+        b.click();
+        await attendre(500);
+        if (jeu.etat !== 'jeu') throw new Error(`téléportation « ${b.textContent} » : la partie s'est arrêtée`);
+      }
+      ok(`${$('dev-zones').children.length - 1} téléportations, aucune mort`);
+      sousUnePresse();
+      await attendre(5000);
+      if (jeu.etat !== 'jeu') throw new Error('invincible, mais écrasé par la presse');
+      ok('invincible : la presse ne tue pas');
+      document.querySelector('[data-outil="vol"]').click();
+      const y0 = jeu.j.y;
+      jeu.deplacerVol(0, -200);
+      await attendre(300);
+      if (!(jeu.j.y > y0 + 4)) throw new Error('le vol libre ne fait pas monter');
+      document.querySelector('[data-outil="vol"]').click();
+      ok('vol libre');
+      document.querySelector('[data-outil="communaute"]').click();
+      if (!jeu.statues.some((st) => st.simule)) throw new Error('pas de corps simulés');
+      ok(`communauté simulée : ${jeu.statues.filter((st) => st.simule).length} corps`);
+      [...$('dev-zones').children].at(-1).click();
+      await attendreQue(() => !$('ecran-gloire').hidden, 8000, 'écran « célèbre » en arrivant au bord');
+      ok('bord atteint : écran « célèbre »');
+      $('btn-suivant-gl').click();
+      await attendreQue(() => jeu.etat === 'jeu', 3000, 'nouvelle partie après la gloire');
+    } else {
+      // Mode seul : deux corps, dont un en plein saut
+      changerMode('seul');
+      await partie('partie seule 1');
+      // Sur un téléphone lent, la chute depuis la presse peut durer plus que 1,5 s
+      await attendreQue(() => jeu.j.sol, 8000, 'atterrissage du nouvel exemplaire');
+      if (jeu.j.sol !== jeu.niveau.depart.boite) {
+        throw new Error(`le joueur n'est pas sur la corniche la plus basse (sur : ${jeu.j.sol?.type ?? 'rien'}, y = ${jeu.j.y.toFixed(2)})`);
+      }
+      ok(`départ sur la corniche la plus basse (${jeu.niveau.depart.y.toFixed(1)} m)`);
+      await imprimerEtAttendre('seul, impression 1', true);
+      await partie('partie seule 2');
+      await imprimerEtAttendre('seul, impression 2', false);
 
-    // Retour au mode seul : ses deux corps, et pas celui d'en ligne
-    changerMode('seul');
-    await partie('retour au mode seul');
-    await attendreQue(() => miens() === 2, 3000, 'les deux corps du mode seul, sans celui d\'en ligne');
-    ok('seul : ses deux corps, sans celui d\'en ligne');
+      // En ligne (réseau coupé par l'essai) : les corps du mode seul ne doivent pas y être
+      changerMode('en-ligne');
+      await partie('partie en ligne');
+      await attendreQue(() => miens() === 0, 3000, 'monde en ligne sans les corps du mode seul');
+      ok('en ligne : aucun corps du mode seul');
+      await imprimerEtAttendre('en ligne, impression', false);
 
-    jeu.soupe = jeu.j.y + 1;
-    await attendreQue(() => !$('ecran-recycle').hidden, 10000, 'écran « recyclé »');
-    ok('noyade : écran « recyclé » affiché');
+      // Retour au mode seul : ses deux corps, et pas celui d'en ligne
+      changerMode('seul');
+      await partie('retour au mode seul');
+      await attendreQue(() => miens() === 2, 3000, 'les deux corps du mode seul, sans celui d\'en ligne');
+      ok('seul : ses deux corps, sans celui d\'en ligne');
+
+      // Écrasé sous une presse
+      sousUnePresse();
+      await attendreQue(() => !$('ecran-recycle').hidden, 9000, 'écran « écrasé »');
+      if ($('re-titre').textContent !== 'ÉCRASÉ') throw new Error(`écran « ${$('re-titre').textContent} » au lieu de « ÉCRASÉ »`);
+      ok('presse : écran « écrasé » affiché');
+      await partie('après l\'écrasement');
+
+      jeu.soupe = jeu.j.y + 1;
+      await attendreQue(() => !$('ecran-recycle').hidden, 10000, 'écran « recyclé »');
+      ok('noyade : écran « recyclé » affiché');
+    }
     demarrerPartie();
     const h0 = jeu.horloge;
     await attendre(1500);
@@ -608,10 +672,79 @@ async function essaiAutomatique() {
   }
 }
 
+/* ------------------------------------------------------------- Développeur */
+
+/* Appli EXEMPLAIRE DEV (ou ?dev=1) : voir tout le niveau sans perdre.
+   Aucun échange avec le serveur, des corps à part ; rien de ce qu'on fait ici
+   n'atteint le monde des joueurs. */
+function installerModeDev() {
+  reseau.modeDev();
+  jeu.dev.actif = true;
+  modeCharge = null;
+  $('tampon-dev').hidden = false;
+  $('btn-jouer-dev').hidden = false;
+  document.querySelector('.modes').hidden = true;
+  $('btn-galerie').hidden = true;
+  $('btn-jouer-dev').onclick = () => {
+    son.debloquer();
+    son.jouer('clic');
+    if (lire('pseudo', null) === null) ecrire('pseudo', 'DEV');
+    demarrerPartie();
+  };
+  // Destinations : départ, chaque palier de 15 m, le vide, la 4e marche du vide, le bord
+  const n = jeu.niveau;
+  const pres = (y) => n.chemin.reduce((m, c) => (Math.abs(c.y - y) < Math.abs(m.y - y) ? c : m));
+  const destinations = [['DÉPART', n.depart], ...[15, 30, 45, 60, 75].map((h) => [`${h} M`, pres(h)]),
+    ['VIDE', n.p0], ['VIDE 4', n.vide[3]], ['BORD', n.vide.at(-1)]];
+  for (const [nom, c] of destinations) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = nom;
+    b.onclick = (e) => { e.stopPropagation(); if (jeu.etat === 'jeu') jeu.teleporter(c); };
+    $('dev-zones').appendChild(b);
+  }
+  const outils = { infos: false };
+  const majBoutons = () => {
+    for (const b of document.querySelectorAll('[data-outil]')) {
+      const o = b.dataset.outil;
+      b.classList.toggle('actif', o === 'infos' ? outils.infos : !!jeu.dev[o]);
+    }
+    $('dev-infos').hidden = !outils.infos;
+  };
+  for (const b of document.querySelectorAll('[data-outil]')) {
+    b.onclick = (e) => {
+      e.stopPropagation();
+      const o = b.dataset.outil;
+      if (o === 'infos') outils.infos = !outils.infos;
+      else if (o === 'communaute') jeu.basculerCommunaute(!jeu.dev.communaute);
+      else jeu.dev[o] = !jeu.dev[o];
+      jeu.appliquerDev();
+      majBoutons();
+    };
+  }
+  majBoutons();
+  let images = 0, t0 = performance.now();
+  setInterval(() => {
+    const ips = (images * 1000) / (performance.now() - t0);
+    images = 0;
+    t0 = performance.now();
+    $('dev').hidden = jeu.etat !== 'jeu' || pause;
+    if (!outils.infos || jeu.etat !== 'jeu') return;
+    const i = jeu.infosDev();
+    $('dev-infos').textContent = `s ${i.s.toFixed(1)} · y ${i.y.toFixed(1)} · zone ${i.zone} · ${ips.toFixed(0)} i/s
+${i.appels} appels · ${(i.triangles / 1000).toFixed(0)} k triangles · ${i.corps} corps
+échelle ${i.echelle.toFixed(2)} · ratio ${i.ratio}`;
+  }, 250);
+  const compter = () => { images++; requestAnimationFrame(compter); };
+  requestAnimationFrame(compter);
+}
+
 $('chargement').hidden = true;
 montrer('ecran-titre');
 const modeEssai = new URLSearchParams(location.search).has('essai');
+const modeDev = new URLSearchParams(location.search).has('dev');
 if (modeEssai) reseau.coupe = true;
+if (modeDev) installerModeDev();
 afficherEtat();
 rafraichirEtat();
 rafraichirStatues();

@@ -4,13 +4,13 @@
 # avec ses vraies fonctions (trois impressions de suite, une noyade), sans réseau,
 # et écrit chaque étape dans le journal Android. On vérifie que la séquence va au
 # bout (ESSAI OK), sans plantage ni erreur JavaScript. Captures dans captures/.
-# Usage : bash essai-emulateur.sh exemplaire.apk
+# Usage : bash essai-emulateur.sh exemplaire.apk [nom.du.paquet]
 set -euo pipefail
 APK="$1"
-P=io.github.loscripts.exemplaire
+P="${2:-io.github.loscripts.exemplaire}"
 mkdir -p captures
 
-capture() { adb exec-out screencap -p > "captures/$1.png" || true; }
+capture() { adb exec-out screencap -p > "captures/${P##*.}-$1.png" || true; }
 
 adb install -r "$APK"
 # Sans réseau : l'essai ne doit jamais toucher le vrai serveur (le jeu coupe

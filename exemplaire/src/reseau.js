@@ -3,6 +3,7 @@
    reçus et ses propres corps (qui, eux, ne servent alors qu'à soi). */
 import { SERVEUR } from './reglages.js';
 import { VIE_STATUE_H } from './constantes.js';
+import { VERSION_NIVEAU } from './niveau.js';
 
 const CLE = 'exemplaire.';
 
@@ -57,7 +58,14 @@ async function rpc(nom, args = {}, delai = 8000) {
 /* Mes corps, gardés sur le téléphone : une liste par mode, pour que rien ne
    passe de l'un à l'autre. En ligne, ils servent à les reconnaître parmi ceux
    de tout le monde ; en mode seul, ce sont les seuls corps du monde. */
-const cleCorps = () => (reseau.seul ? 'corpsSeul' : 'mesCorps');
+/* Les clés portent aussi la version du niveau : les corps posés dans l'ancien
+   niveau (avant la version 2, sans suffixe) flotteraient dans le nouveau. */
+const cleCorps = () => {
+  const base = reseau.mode === 'dev' ? 'corpsDev' : reseau.seul ? 'corpsSeul' : 'mesCorps';
+  return VERSION_NIVEAU > 1 ? `${base}${VERSION_NIVEAU}` : base;
+};
+// Registre local (numéros, recyclés, sortis) : un pour le mode seul, un pour le mode développeur
+const suffixe = () => (reseau.mode === 'dev' ? 'Dev' : 'Seul');
 
 function mesCorps() {
   const maintenant = Date.now();
@@ -65,9 +73,9 @@ function mesCorps() {
 }
 
 function compterSeul(champ) {
-  const s = lire('statsSeul', { recycles: 0, sortis: 0 });
+  const s = lire(`stats${suffixe()}`, { recycles: 0, sortis: 0 });
   s[champ] = (s[champ] || 0) + 1;
-  ecrire('statsSeul', s);
+  ecrire(`stats${suffixe()}`, s);
 }
 
 export const reseau = {
@@ -77,16 +85,22 @@ export const reseau = {
   /* 'en-ligne' : monde partagé, les corps passent par le serveur.
      'seul' : aucun échange, les corps restent sur ce téléphone. */
   mode: lire('mode', 'en-ligne') === 'seul' ? 'seul' : 'en-ligne',
-  get seul() { return this.mode === 'seul'; },
+  // Le mode développeur se comporte comme le mode seul (aucun échange), avec ses propres corps
+  get seul() { return this.mode === 'seul' || this.mode === 'dev'; },
   choisirMode(m) {
+    if (this.mode === 'dev') return;
     this.mode = m === 'seul' ? 'seul' : 'en-ligne';
     ecrire('mode', this.mode);
+  },
+  modeDev() {
+    this.mode = 'dev';
+    this.coupe = true;
   },
 
   /* Le registre du mode seul, tenu sur le téléphone. */
   etatSeul() {
-    const s = lire('statsSeul', { recycles: 0, sortis: 0 });
-    return { produits: lire('compteurSeul', 0), debout: mesCorps().length, recycles: s.recycles || 0, sortis: s.sortis || 0 };
+    const s = lire(`stats${suffixe()}`, { recycles: 0, sortis: 0 });
+    return { produits: lire(`compteur${suffixe()}`, 0), debout: mesCorps().length, recycles: s.recycles || 0, sortis: s.sortis || 0 };
   },
 
   async etat() {
@@ -100,8 +114,8 @@ export const reseau = {
 
   async nouvelExemplaire(pseudo) {
     if (this.seul) {
-      const n = lire('compteurSeul', 0) + 1;
-      ecrire('compteurSeul', n);
+      const n = lire(`compteur${suffixe()}`, 0) + 1;
+      ecrire(`compteur${suffixe()}`, n);
       return n;
     }
     try {
@@ -121,8 +135,9 @@ export const reseau = {
     let st = local;
     if (numero && !this.seul) {
       try {
-        st = await rpc('imprimer', {
-          p_appareil: appareil, p_numero: numero, p_s: c.s, p_y: c.y, p_pose: c.pose, p_face: c.face,
+        // imprimer_dans : le corps est rangé dans le monde de cette version du niveau
+        st = await rpc('imprimer_dans', {
+          p_niveau: VERSION_NIVEAU, p_appareil: appareil, p_numero: numero, p_s: c.s, p_y: c.y, p_pose: c.pose, p_face: c.face,
           p_mot: c.mot, p_heure: c.heure, p_minute: c.minute, p_batterie: c.batterie,
         });
       } catch { /* garde la version locale */ }
@@ -172,11 +187,11 @@ export const reseau = {
     if (this.seul) return mesCorps().map((c) => ({ ...c, mien: true }));
     let liste;
     try {
-      liste = await rpc('statues_vivantes', { p_limite: 900 }, 12000);
+      liste = await rpc('statues_du_niveau', { p_niveau: VERSION_NIVEAU, p_limite: 900 }, 12000);
       if (!Array.isArray(liste)) throw new Error('reponse_invalide');
-      ecrire('statues', liste);
+      ecrire(`statues${VERSION_NIVEAU}`, liste);
     } catch {
-      liste = lire('statues', []).filter((c) => Date.parse(c.expire_le) > Date.now());
+      liste = lire(`statues${VERSION_NIVEAU}`, []).filter((c) => Date.parse(c.expire_le) > Date.now());
     }
     const miens = mesCorps();
     const idsMiens = new Set(miens.map((c) => c.id));

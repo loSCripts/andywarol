@@ -6,12 +6,15 @@ import {
   SOUPE_DEPART, SOUPE_DELAI, SOUPE_V0, SOUPE_ACC, SOUPE_RATTRAPAGE, MOTS,
 } from './constantes.js';
 import { alea } from './alea.js';
-import { genererNiveau, zoneDe, GRAINE } from './niveau.js';
+import { genererNiveau, zoneDe, GRAINE, escalierEntre } from './niveau.js';
 import { construireMonde } from './monde.js';
-import { creerJoueur, pas, sauter, apercu, surfaceDessous, ecart, enroule } from './physique.js';
+import {
+  creerJoueur, pas, sauter, apercu, surfaceDessous, ecart, enroule, corpsChaine, angleBalancier,
+} from './physique.js';
 import {
   ENCRE, geoCornichesFixes, geoCorniche, geoParoi, geoDecorBoite, geoMatrice, geoCouvercle,
   geoPetiteBoite, construireMannequin, appliquerPose, POSES_DEF, geoPose, atlasTextes, geoBandeauGloire, versXZ,
+  R_SUSPENDUS, geoSuspendu, geoRail, geoTetePresse, geoGuidePresse, geoPotence,
 } from './modeles.js';
 import { materiauEncre, communs } from './rendu.js';
 
@@ -42,6 +45,8 @@ export class Jeu {
     this.camAngle = 0;
     this.camY = 3;
     this.visee = null;
+    // Outils du mode développeur (appli EXEMPLAIRE DEV) : rien n'est actif par défaut
+    this.dev = { actif: false, vol: false, soupe: true, invincible: true, communaute: false };
     this.batterie = null;
     this.suivreBatterie();
     this.construireDecor();
@@ -141,6 +146,46 @@ export class Jeu {
     this.points.frustumCulled = false;
     this.points.count = 0;
     sc.add(this.points);
+
+    // Obstacles : presses, chaînes d'exemplaires suspendus, balanciers
+    const o = this.niveau.obstacles;
+    const mObst = materiauEncre({ deuxFaces: true, id: 0.52 });
+    this.presses = o.presses.map((p, i) => {
+      const tete = new THREE.Group();
+      tete.add(new THREE.Mesh(geoTetePresse(p.l), materiauEncre({ deuxFaces: true, id: 0.6 + i * 0.013 })));
+      const voyant = new THREE.Mesh(new THREE.IcosahedronGeometry(0.22, 1), materiauEncre({ encre: ENCRE.SOUPE, emissif: true, id: 0.71 }));
+      voyant.position.set(R_INT + 0.3, 1.5, 0);
+      tete.add(voyant);
+      tete.rotation.y = -p.s / R;
+      sc.add(tete);
+      sc.add(new THREE.Mesh(geoGuidePresse(p.s, p.yHaut + 2.6), mObst));
+      return { p, tete, voyant, phase: 'repos' };
+    });
+    for (const c of o.chaines) sc.add(new THREE.Mesh(geoRail(c.y), mObst));
+    this.bras = o.balanciers.map((b) => {
+      sc.add(new THREE.Mesh(geoPotence(b.s, b.y), mObst));
+      const pivot = new THREE.Group();
+      const [x, z] = versXZ(b.s, R_SUSPENDUS);
+      pivot.position.set(x, b.y, z);
+      pivot.rotation.y = -b.s / R;
+      const bras = new THREE.Group();
+      const tige = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, b.longueur, 5), mObst);
+      tige.position.y = -b.longueur / 2;
+      bras.add(tige);
+      pivot.add(bras);
+      sc.add(pivot);
+      return { b, pivot, bras };
+    });
+    const nSusp = Math.max(1, o.chaines.reduce((n, c) => n + c.nombre, 0) + o.balanciers.length);
+    this.suspendus = new THREE.InstancedMesh(geoSuspendu(), materiauEncre({ id: 0 }), nSusp);
+    this.suspendus.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(nSusp * 3), 3);
+    for (let i = 0; i < nSusp; i++) {
+      // rouge soupe : ceux-là sont déjà en route vers la marmite
+      this.suspendus.instanceColor.array[i * 3] = ENCRE.SOUPE;
+      this.suspendus.instanceColor.array[i * 3 + 1] = hashId(`suspendu${i}`);
+    }
+    this.suspendus.frustumCulled = false;
+    sc.add(this.suspendus);
 
     // Corps : un maillage instancié par pose
     this.matStatue = materiauEncre({ id: 0 });
@@ -251,6 +296,8 @@ export class Jeu {
     this.mort = null;
     this.mannequin.visible = true;
     this.mannequin.rotation.set(0, 0, 0);
+    this.mannequin.scale.set(1, 1, 1);
+    this.appliquerDev();
     this.camAngle = this.j.s / R;
     this.camY = d.y + 2.5;
     Object.assign(this.effets, { flash: 0.6, grille: 0, revele: 1, rouge: 0 });
@@ -368,18 +415,29 @@ export class Jeu {
       this.son.jouer(e);
       if (e === 'lourd') navigator.vibrate?.(30);
       if (e === 'atterrissage') navigator.vibrate?.(8);
+      if (e === 'heurt') navigator.vibrate?.(40);
     }
     this.duree += dt;
     this.hMax = Math.max(this.hMax, j.y);
 
-    // La soupe monte
-    if (this.duree > SOUPE_DELAI) {
+    // Écrasé par une presse
+    if (j.ecrase) {
+      this.etat = 'recycle';
+      this.mort = { type: 'recycle', cause: 'ecrase', t: 0 };
+      this.annulerVisee();
+      navigator.vibrate?.([200, 30, 60]);
+      this.rappels.recycle?.(this.hMax);
+      return;
+    }
+
+    // La soupe monte (mode développeur : elle peut rester en bas)
+    if (this.duree > SOUPE_DELAI && !(this.dev.actif && !this.dev.soupe)) {
       const t = this.duree - SOUPE_DELAI;
       const ecartSoupe = j.y - this.soupe;
       const v = SOUPE_V0 + SOUPE_ACC * t + Math.max(0, ecartSoupe - 30) * SOUPE_RATTRAPAGE;
       this.soupe += v * dt;
     }
-    if (this.soupe > j.y + 0.35) {
+    if (this.soupe > j.y + 0.35 && !(this.dev.actif && this.dev.invincible)) {
       this.etat = 'recycle';
       this.mort = { type: 'recycle', t: 0 };
       this.annulerVisee();
@@ -420,7 +478,7 @@ export class Jeu {
     this.animerJoueur(dt);
     this.majSoupe(dt);
     const danger = Math.max(0, Math.min(1, 1 - (j.y - this.soupe) / 14));
-    this.son.battre(danger, true);
+    this.son.battre(danger, true, zoneDe(j.y, this.niveau));
     this.danger = danger;
   }
 
@@ -485,7 +543,45 @@ export class Jeu {
     this.bulles.instanceMatrix.needsUpdate = true;
   }
 
+  /* Presses (avec tremblement d'avertissement), chaînes et balanciers. */
+  majObstacles() {
+    const t = this.monde.t;
+    this.presses.forEach((pr, i) => {
+      const b = this.monde.presses[i];
+      const avant = pr.phase;
+      pr.phase = b.phase;
+      const tremble = b.phase === 'tremble' ? Math.sin(this.horloge * 70) * 0.06 : 0;
+      pr.tete.position.y = b.y0 + tremble;
+      pr.voyant.visible = b.phase === 'tremble' || b.phase === 'descend' || (b.phase === 'bas' && Math.sin(this.horloge * 20) > 0);
+      if (avant === 'descend' && b.phase === 'bas' && Math.abs(b.y0 - this.camY) < 12) {
+        this.son.jouer('presse');
+        if (this.j && Math.abs(this.j.y - b.y0) < 0.1 && this.etat === 'jeu') navigator.vibrate?.(25);
+      }
+    });
+    const m = new THREE.Matrix4(), r = new THREE.Matrix4(), d = new THREE.Matrix4();
+    let k = 0;
+    for (const c of this.niveau.obstacles.chaines) {
+      for (let i = 0; i < c.nombre; i++) {
+        const s = corpsChaine(c, i, t);
+        const [x, z] = versXZ(s, R_SUSPENDUS);
+        m.makeRotationY(-s / R).multiply(r.makeRotationX(Math.sin(this.horloge * 1.7 + i * 1.3) * 0.12));
+        m.setPosition(x, c.y - 0.12, z);
+        this.suspendus.setMatrixAt(k++, m);
+      }
+    }
+    for (const { b, pivot, bras } of this.bras) {
+      const { th } = angleBalancier(b, t);
+      bras.rotation.x = -th;
+      pivot.updateMatrixWorld(true);
+      m.copy(bras.matrixWorld).multiply(d.makeTranslation(0, -b.longueur, 0));
+      this.suspendus.setMatrixAt(k++, m);
+    }
+    this.suspendus.count = k;
+    this.suspendus.instanceMatrix.needsUpdate = true;
+  }
+
   majDynamiques() {
+    this.majObstacles();
     for (const { c, ms } of this.dynamiques) {
       const b = c.boite;
       if (c.type === 'mobile') {
@@ -539,6 +635,12 @@ export class Jeu {
         e.decal.lerp(new THREE.Vector2(1.2, -0.9), 1 - Math.exp(-dt * 2.2));
         if (e.revele >= 1 && !mo.fini) { mo.fini = true; this.rappels.planche?.(); }
       }
+    } else if (mo.type === 'recycle' && mo.cause === 'ecrase') {
+      // aplati net sous la presse
+      this.mannequin.scale.y = Math.max(0.16, 1 - mo.t * 12);
+      this.placerJoueur();
+      e.rouge = Math.min(0.6, mo.t * 1.5);
+      if (mo.t > 1.3 && !mo.fini) { mo.fini = true; this.rappels.planche?.(); }
     } else if (mo.type === 'recycle') {
       // le corps coule en se recroquevillant
       appliquerPose(this.art, POSES_DEF[6], 1 - Math.exp(-dt * 3));
@@ -670,6 +772,7 @@ export class Jeu {
 
   majTitre(dt) {
     this.tempsTitre += dt;
+    this.son.battre(0, true, 'titre');
     this.imp.placerPlanche(0, 0, 1, 1);
     this.mannequin.visible = false;
     this.points.count = 0;
@@ -679,6 +782,65 @@ export class Jeu {
     this.effets.revele = 1;
     this.effets.rouge = 0;
     this.monde.avancer(dt);
+  }
+
+  /* ---------------------------------------------------------- Développeur */
+
+  appliquerDev() {
+    if (!this.j) return;
+    this.j.invincible = this.dev.actif && this.dev.invincible;
+    this.j.vol = this.dev.actif && this.dev.vol;
+    if (this.j.vol) { this.j.sol = null; this.j.vs = 0; this.j.vy = 0; }
+  }
+
+  /* Vol libre : le joueur suit le doigt (1 px ≈ 3 cm). */
+  deplacerVol(dx, dy) {
+    const j = this.j;
+    j.s = enroule(j.s + dx * 0.03);
+    j.y = Math.max(-1, Math.min(HAUT_BOITE + 4, j.y - dy * 0.03));
+  }
+
+  /* Téléportation sur une corniche (ou au-dessus en vol). */
+  teleporter(c) {
+    const j = this.j;
+    j.s = enroule(c.s + c.l / 2);
+    j.y = c.y;
+    j.vs = 0;
+    j.vy = 0;
+    j.sol = this.dev.vol ? null : c.boite;
+    j.ecrase = false;
+    this.camAngle = j.s / R;
+    this.camY = c.y + 1.2;
+    this.soupe = Math.min(this.soupe, c.y - 12);
+    this.fenetreY = -999;
+  }
+
+  /* Corps simulés sur tous les écarts du vide : pour monter jusqu'en haut sans communauté. */
+  basculerCommunaute(oui) {
+    this.dev.communaute = oui;
+    for (const st of this.statues.filter((s) => s.simule)) this.monde.retirer(st.boite);
+    this.statues = this.statues.filter((s) => !s.simule);
+    if (oui) {
+      const v = this.niveau.vide, corps = [];
+      for (let i = 2; i + 1 < v.length; i++) {
+        if (v[i].type === 'bouche') continue;
+        for (const m of escalierEntre(v[i], v[i + 1])) {
+          corps.push({ ...m, pose: 3, id: `sim${corps.length}`, numero: 0, pseudo: 'SIMULÉ', mot: 'rien', heure: 0, minute: 0, simule: true });
+        }
+      }
+      this.ajouterStatues(corps);
+    }
+    this.fenetreY = -999;
+  }
+
+  infosDev() {
+    const info = this.imp.statsScene || { appels: 0, triangles: 0 };
+    const j = this.j;
+    return {
+      s: j.s, y: j.y, zone: zoneDe(j.y, this.niveau), corps: this.statues.length,
+      appels: info.appels, triangles: info.triangles,
+      echelle: this.imp.echelleScene, ratio: this.imp.ratio,
+    };
   }
 
   dessiner() {

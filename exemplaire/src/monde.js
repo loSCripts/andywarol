@@ -13,6 +13,13 @@ export function construireMonde(niveau, statues = []) {
       phase: c.phase ?? 0,
     });
   }
+  const o = niveau.obstacles;
+  if (o) {
+    for (const p of o.presses) p.boite = m.ajouterPresse(p);
+    for (const c of o.chaines) m.ajouterChaine(c);
+    for (const b of o.balanciers) m.ajouterBalancier(b);
+  }
+  m.majObstacles();
   for (const st of statues) st.boite = m.ajouterStatue(st);
   return m;
 }

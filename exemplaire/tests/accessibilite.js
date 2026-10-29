@@ -11,6 +11,14 @@ function positionsDepart(b) {
   return [0.15, 0.5, 0.85].map((f) => b.s + f * b.l);
 }
 
+function obstacleProche(monde, b) {
+  if (b.type === 'sol') return false;
+  // l'obstacle peut être au départ comme à l'arrivée du saut
+  return monde.presses.some((p) => Math.abs(p.presse.yBas - b.y1) < 7)
+    || monde.chaines.some((c) => b.y1 > c.y - 8 && b.y1 < c.y + 2)
+    || monde.balanciers.some((bl) => Math.abs(bl.y - 4.8 - b.y1) < 9);
+}
+
 export function explorer(monde, depart, { yMax = 1e9 } = {}) {
   const atteintes = new Set([depart]);
   const file = [depart];
@@ -18,7 +26,9 @@ export function explorer(monde, depart, { yMax = 1e9 } = {}) {
   while (file.length) {
     const b = file.shift();
     if (b.y1 > yMax) continue;
-    const temps = b.mobile || b.bouche ? [0, 0.4, 0.8, 1.2, 1.6, 2.0, 2.4, 2.8] : [0];
+    // Là où quelque chose bouge (plateforme, bouche, presse, corps suspendus),
+    // on essaie plusieurs instants de départ : il faut un moment où ça passe
+    const temps = b.mobile || b.bouche || obstacleProche(monde, b) ? [0, 0.45, 0.9, 1.35, 1.8, 2.25, 2.7, 3.15, 3.6, 4.05] : [0];
     for (const t0 of temps) {
       monde.t = t0;
       monde.avancer(0);
@@ -35,9 +45,9 @@ export function explorer(monde, depart, { yMax = 1e9 } = {}) {
             for (let k = 0; k < 180; k++) {
               monde.avancer(DT);
               pas(j, monde, DT, null, true);
-              if (j.sol) break;
+              if (j.sol || j.ecrase) break;
             }
-            const arr = j.sol;
+            const arr = j.ecrase ? null : j.sol;
             if (arr && !atteintes.has(arr)) {
               atteintes.add(arr);
               parents.set(arr, b);
