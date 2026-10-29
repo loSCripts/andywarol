@@ -20,7 +20,9 @@ adb shell svc data disable || true
 adb logcat -G 16M || true
 adb logcat -c
 
-adb shell am start -W -n $P/.Ecran --ez essai true
+# Nom complet de l'activité : l'appli des développeurs a un paquet en « .dev »,
+# mais la classe reste dans io.github.loscripts.exemplaire.
+adb shell am start -W -n "$P/io.github.loscripts.exemplaire.Ecran" --ez essai true
 # Le rendu WebGL est logiciel sur l'émulateur : la séquence prend une à deux minutes
 fini=0
 for i in $(seq 1 36); do
